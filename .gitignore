@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# HydroMT clipped extract and generated Wflow models (keep local, do not commit)
+hydromt_data/
+wflow_moselle_epinal/
