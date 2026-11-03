@@ -1,0 +1,2 @@
+hydromt build wflow_sbm "./wflow_moselle_epinal" -i "./hydromt/wflow_build.yml" -d "./hydromt_data/data_catalog.yml" -v
+hydromt update wflow_sbm "./wflow_moselle_epinal" -i "./hydromt/update_forcing.yml" -d "./hydromt_data/data_catalog.yml" -v

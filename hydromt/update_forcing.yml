@@ -1,48 +1,10 @@
 steps:
-  # - setup_config:                 # options parsed to wflow toml file <section>.<option>
-  #     data:
-  #       time.starttime: 2014-12-31T00:00:00
-  #       time.endtime: 2019-12-31T00:00:00
-  #       time.timestepsecs: 86400
-  #       input.path_forcing: inmaps-era5.nc
-
-  # - setup_precip_forcing:
-  #     precip_fn: eobs          # source for precipitation.
-  #   #   precip_clim_fn:          # source for high resolution climatology to correct precipitation if any.
-
-  # - setup_temp_pet_forcing:
-  #     temp_pet_fn: eobs          # source for temperature and potential evapotranspiration.
-  #     press_correction: True          # if True temperature is corrected with elevation lapse rate.
-  #     temp_correction: True          # if True pressure is corrected with elevation lapse rate.
-  #     dem_forcing_fn: eobs_orography # source of elevation grid corresponding to temp_pet_fn. Used for lapse rate correction.
-  #     pet_method: makkink       # method to compute PET: {debruin, makkink}
-  #     skip_pet: False         # if True, only temperature is prepared.
-
-  # - forcing.write:
-  #     filename: inmaps-eobs.nc
-
-
-  # - setup_precip_forcing:
-  #     precip_fn: era5          # source for precipitation.
-  #   #   precip_clim_fn:          # source for high resolution climatology to correct precipitation if any.
-
-  # - setup_temp_pet_forcing:
-  #     temp_pet_fn: era5          # source for temperature and potential evapotranspiration.
-  #     press_correction: True          # if True temperature is corrected with elevation lapse rate.
-  #     temp_correction: True          # if True pressure is corrected with elevation lapse rate.
-  #     dem_forcing_fn: era5_orography # source of elevation grid corresponding to temp_pet_fn. Used for lapse rate correction.
-  #     pet_method: makkink       # method to compute PET: {debruin, makkink}
-  #     skip_pet: False         # if True, only temperature is prepared.
-
-  # - forcing.write:
-  #     filename: inmaps-era5.nc
-
   - setup_config:                 # options parsed to wflow toml file <section>.<option>
       data:
-        time.starttime: 1990-01-01T00:00:00
+        time.starttime: 2019-01-01T00:00:00
         time.endtime: 2020-12-31T00:00:00
         time.timestepsecs: 86400
-        input.path_forcing: inmaps-eobs-1990-2020.nc
+        input.path_forcing: inmaps-eobs-2019-2020.nc
 
   - setup_precip_forcing:
       precip_fn: eobs_v31.0e          # source for precipitation.
@@ -57,4 +19,6 @@ steps:
       skip_pet: False         # if True, only temperature is prepared.
 
   - forcing.write:
-      filename: inmaps-eobs-1990-2020.nc
+      filename: inmaps-eobs-2019-2020.nc
+
+  - config.write:
