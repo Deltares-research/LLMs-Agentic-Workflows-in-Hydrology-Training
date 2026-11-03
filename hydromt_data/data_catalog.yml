@@ -1,0 +1,347 @@
+meta:
+  version: 1.0
+
+chirps_global:
+  data_adapter:
+    unit_add:
+      time: 86400
+  data_type: RasterDataset
+  driver:
+    name: raster_xarray
+  metadata:
+    category: meteo
+    crs: 4326
+    paper_doi: 10.3133/ds832
+    paper_ref: Funk et al (2014)
+    source_license: CC
+    extent:
+      bbox:
+        East: 180.0
+        North: 50.0
+        South: -50.0
+        West: -180.0
+    time_range:
+      end: '2023-02-01'
+      start: '1981-01-02'
+    source_url: https://www.chc.ucsb.edu/data/chirps
+  uri: chirps_global.nc
+corine:
+  data_type: RasterDataset
+  driver:
+    name: rasterio
+  metadata:
+    category: landuse
+    source_author: European Environment Agency
+    source_license: https://land.copernicus.eu/pan-european/corine-land-cover/clc2018?tab=metadata
+    extent:
+      bbox:
+        East: 7400000.0
+        North: 5500000.0
+        South: 900000.0
+        West: 900000.0
+    source_url: https://land.copernicus.eu/pan-european/corine-land-cover/clc2018
+  uri: corine.tif
+eobs_orography_v31.0e:
+  data_type: RasterDataset
+  driver:
+    name: rasterio
+  metadata:
+    category: meteo
+    crs: 4326
+    paper_doi: 10.1029/2017JD028200
+    paper_ref: Cornes et al (2018)
+    source_license: https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php#datafiles
+    source_url: https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php#datafiles
+    source_version: 31.0e
+  uri: eobs_orography_v31.0e.tif
+eobs_v31.0e:
+  data_adapter:
+    unit_add:
+      time: 86400
+  data_type: RasterDataset
+  driver:
+    name: raster_xarray
+  metadata:
+    category: meteo
+    crs: 4326
+    notes: CAUTION the pressure data (pp) is not yet officially released. Please use
+      with caution, especially in Spain (see the E-OBS changelog).
+    paper_doi: 10.1029/2017JD028200
+    paper_ref: Cornes et al (2018)
+    source_license: https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php#datafiles
+    source_url: https://surfobs.climate.copernicus.eu/dataaccess/access_eobs.php#datafiles
+    source_version: 31.0e
+  uri: eobs_v31.0e.nc
+era5:
+  data_adapter:
+    unit_add:
+      temp: -273.15
+      temp_dew: -273.15
+      temp_max: -273.15
+      temp_min: -273.15
+    unit_mult:
+      kin: 0.000277778
+      kout: 0.000277778
+      press_msl: 0.01
+      ssr: 0.000277778
+  data_type: RasterDataset
+  driver:
+    name: raster_xarray
+  metadata:
+    category: meteo
+    crs: 4326
+    notes: Extracted from Copernicus Climate Data Store; resampled by Deltares to
+      daily frequency using right label for time.
+    paper_doi: 10.1002/qj.3803
+    paper_ref: Hersbach et al. (2019)
+    processing_script: https://github.com/Deltares/hydromt/blob/main/data/src/era5_download_resample_convert.py
+    source_license: https://cds.climate.copernicus.eu/cdsapp/#!/terms/licence-to-use-copernicus-products
+    extent:
+      bbox:
+        East: 359.875
+        North: 90.125
+        South: -90.125
+        West: -0.125
+    time_range:
+      end: '2023-11-30'
+      start: '1950-01-02'
+    source_url: https://doi.org/10.24381/cds.bd0915c6
+  uri: era5/{variable}.nc
+era5_orography:
+  data_adapter:
+    unit_mult:
+      elevtn: 0.10197162129779283
+  data_type: RasterDataset
+  driver:
+    name: raster_xarray
+  metadata:
+    category: meteo
+    crs: 4326
+    notes: Extracted from Copernicus Climate Data Store
+    paper_doi: 10.1002/qj.3803
+    paper_ref: Hersbach et al. (2019)
+    source_license: https://cds.climate.copernicus.eu/cdsapp/#!/terms/licence-to-use-copernicus-products
+    source_url: https://apps.ecmwf.int/codes/grib/param-db?id=129
+    time_range:
+      start: '2018-01-01'
+      end: '2018-01-01'
+    extent:
+      bbox:
+        West: -0.125
+        South: -90.125
+        East: 359.875
+        North: 90.125
+  uri: era5_orography.nc
+
+globcover:
+  data_type: RasterDataset
+  driver:
+    name: rasterio
+  metadata:
+    category: landuse
+    crs: 4326
+    paper_doi: 10.1594/PANGAEA.787668
+    paper_ref: Arino et al (2012)
+    source_license: CC-BY-3.0
+    extent:
+      bbox:
+        East: 179.999
+        North: 90.001
+        South: -64.999
+        West: -180.001
+    source_url: http://due.esrin.esa.int/page_globcover.php
+  uri: globcover.tif
+grdc:
+  data_type: GeoDataFrame
+  driver:
+    name: geodataframe_table
+    options:
+      index_col: 0
+  metadata:
+    category: observed data
+    crs: 4326
+    notes: GRDC-Station Catalogue, last downloaded 2020-07-16
+    source_license: https://www.bafg.de/GRDC/EN/02_srvcs/21_tmsrs/210_prtl/tou.html;jsessionid=A56D50D4A36D3D8707CBF00CBD71F106.live11291?nn=2862854
+    source_url: https://portal.grdc.bafg.de/applications/public.html?publicuser=PublicUser#dataDownload/StationCatalogue
+  uri: grdc.csv
+hydro_lakes:
+  data_adapter:
+    unit_mult:
+      Area_avg: 1000000.0
+  data_type: GeoDataFrame
+  driver:
+    name: pyogrio
+  metadata:
+    category: surface water
+    crs: 4326
+    processing_notes: extract of hydrolakes to only include natural lakes and exclude
+      reservoirs and control lakes (ie filter on Lake_type = 1)
+    source_author: HydroSHEDS
+    extent:
+      bbox:
+        East: 180.0
+        North: 83.576
+        South: -55.865
+        West: -180.0
+  uri: hydro_lakes.gpkg
+hydro_reservoirs:
+  data_adapter:
+    unit_mult:
+      Area_avg: 1000000.0
+      Capacity_max: 1000000.0
+      Capacity_min: 1000000.0
+      Capacity_norm: 1000000.0
+      Vol_avg: 1000000.0
+  data_type: GeoDataFrame
+  driver:
+    name: pyogrio
+  metadata:
+    category: surface water
+    crs: 4326
+    nodata: -99
+    notes: GRanD.v1.1_HydroLAKES.v10_JRC.2016
+    processing_notes: combined not natural lakes from HydroLAKES v10 (Lake_type !=
+      1) with reservoirs attributes from GRanD v1.1
+    source_author: Alessia Matano
+    extent:
+      bbox:
+        East: 176.825
+        North: 70.396
+        South: -45.881
+        West: -153.059
+  uri: hydro_reservoirs.gpkg
+hydro_rivers_lin:
+  data_type: GeoDataFrame
+  driver:
+    name: pyogrio
+  metadata:
+    category: hydrography
+    paper_doi: 10.5281/zenodo.3552776
+    paper_ref: Lin et al. (2019)
+    processing_notes: hydrography/rivers_lin2019/README
+    source_license: CC-BY-NC 4.0
+    extent:
+      bbox:
+        East: 180.237
+        North: 82.112
+        South: -55.414
+        West: -177.204
+    source_url: https://zenodo.org/record/3552776#.YVbOrppByUk
+  uri: hydro_rivers_lin.gpkg
+merit_hydro_ihu:
+  data_type: RasterDataset
+  driver:
+    name: rasterio
+  metadata:
+    category: topography
+    crs: 4326
+    paper_doi: 10.5194/hess-2020-582
+    paper_ref: Eilander et al. (2021)
+    processing_notes: topography/merit_hydro_ihu/README
+    source_doi: 10.5281/zenodo.5166932
+    source_license: ODC-By 1.0
+    extent:
+      bbox:
+        East: 180.0
+        North: 85.0
+        South: -60.0
+        West: -180.0
+    source_url: https://zenodo.org/record/5166932#.YVbxJ5pByUk
+  uri: merit_hydro_ihu/{variable}.tif
+merit_hydro_ihu_index:
+  data_type: GeoDataFrame
+  driver:
+    name: pyogrio
+  metadata:
+    category: topography
+    crs: 4326
+    paper_doi: 10.5194/hess-25-5287-2021
+    paper_ref: Eilander et al. (2021)
+    processing_notes: topography/merit_hydro_ihu/README
+    source_license: CC-BY-NC 4.0
+    extent:
+      bbox:
+        East: 190.35
+        North: 83.683
+        South: -59.467
+        West: -180.025
+    source_url: https://zenodo.org/record/5166932#.YVbxJ5pByUk
+  uri: merit_hydro_ihu_index.gpkg
+
+modis_lai:
+  data_adapter:
+    unit_mult:
+      LAI: 0.1
+  data_type: RasterDataset
+  driver:
+    name: raster_xarray
+  metadata:
+    category: landuse
+    crs: 4326
+    paper_doi: 10.5067/MODIS/MCD15A3H.006
+    paper_ref: Myneni et al (2015)
+    processing_notes: this dataset has been extracted from GEE ('MODIS/006/MCD15A3H')
+      for the period '2003-01-01', '2017-12-31'
+    processing_script:
+      GEE_script: landuse/modis/MODIS_MCD15A3H_LAI/GEE_MODIS_LAI.js
+      merge_script: landuse/modis/MODIS_MCD15A3H_LAI/merge_rasters_GEE_LAI.py
+    source_license: https://lpdaac.usgs.gov/data/data-citation-and-policies/
+    extent:
+      bbox:
+        East: 180.004
+        North: 90.002
+        South: -90.002
+        West: -180.004
+    source_url: https://lpdaac.usgs.gov/products/mcd15a3hv006/
+  uri: modis_lai.nc
+soilgrids:
+  data_adapter:
+    unit_mult:
+      bd_sl1: 0.001
+      bd_sl2: 0.001
+      bd_sl3: 0.001
+      bd_sl4: 0.001
+      bd_sl5: 0.001
+      bd_sl6: 0.001
+      bd_sl7: 0.001
+      oc_sl1: 0.1
+      oc_sl2: 0.1
+      oc_sl3: 0.1
+      oc_sl4: 0.1
+      oc_sl5: 0.1
+      oc_sl6: 0.1
+      oc_sl7: 0.1
+      ph_sl1: 0.1
+      ph_sl2: 0.1
+      ph_sl3: 0.1
+      ph_sl4: 0.1
+      ph_sl5: 0.1
+      ph_sl6: 0.1
+      ph_sl7: 0.1
+  data_type: RasterDataset
+  driver:
+    name: rasterio
+  metadata:
+    category: soil
+    crs: 4326
+    notes: "soilthickness is based on 1) soilgrids (global) and 2) dataset for Eurasia\
+      \ (ESDAC, 2004; Panagos et al., 2012): ESDAC, 2004. The european soil database\
+      \ distribution version 2.0, european commission and the European soil bureau\n\
+      \ network.  esdac.jrc.ec.europa.eu, accessed: 2017-11-17.  Panagos, P., Van\
+      \ Liedekerke, M., Jones, A., Montanarella, L., 2012. European soil data centre:\
+      \ Response to european policy support  and public data requirements. Land Use\
+      \ Policy 29 (2), 329\xE2\u20AC\u201C338."
+    paper_doi: 10.1371/journal.pone.0169748
+    paper_ref: Hengl et al. (2017)
+    processing_notes: soilthickness is based on 1) soilgrids (global, depth to bedrock
+      - BDRICM variable) and 2) dataset for Eurasia
+    processing_script: p:/wflow_global/static_data/wflow_sbm_parameters/
+    source_license: ODbL
+    extent:
+      bbox:
+        East: 180.0
+        North: 90.0
+        South: -90.0
+        West: -180.0
+    source_url: https://www.isric.org/explore/soilgrids/faq-soilgrids-201
+  uri: soilgrids/{variable}.tif
