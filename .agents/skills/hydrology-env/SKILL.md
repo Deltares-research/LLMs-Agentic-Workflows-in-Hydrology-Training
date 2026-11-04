@@ -1,0 +1,159 @@
+---
+name: hydrology-env
+description: Installs and verifies the hydrology training stack (Git, uv, Julia, Python 3.13, hydromt, hydromt_wflow, Wflow.jl). Use when setting up the course environment, installing hydromt or wflow, creating the project venv, or checking package versions.
+---
+
+# Hydrology training environment
+
+Bootstrap Git, uv, Julia, Python 3.13, hydromt, hydromt_wflow, and Wflow.jl for this repo. Use existing tools if they already meet the version gates. Do not re-run `uv init`.
+
+## Hard bans
+
+- No conda, miniforge, mamba, or pixi.
+- Never `uv add wflow`, `pip install wflow`, or `python -c "import wflow"`. That is an obsolete Python package. The model runtime is Julia `Wflow`.
+- Do not install QGIS, Notepad++, or other GUI editors as part of this skill.
+- Do not reimplement version checks in prose. Execute `scripts/verify_env.py`.
+
+## Utility scripts
+
+**verify_env.py**: execute this script (do not read it as the check). Run from the repo root:
+
+```bash
+python .agents/skills/hydrology-env/scripts/verify_env.py
+```
+
+Print the script output. Stop on non-zero exit. Only continue when it reports all OK.
+
+## Workflow
+
+Copy and track:
+
+```
+Task Progress:
+- [ ] Step 1: Detect OS and refresh PATH if tools were just installed
+- [ ] Step 2: Git
+- [ ] Step 3: uv
+- [ ] Step 4: Julia (juliaup)
+- [ ] Step 5: Python 3.13 project env (uv sync)
+- [ ] Step 6: Wflow.jl
+- [ ] Step 7: Verify (must pass)
+```
+
+After every install step that changes PATH, open a new shell or prepend the install location. Then continue.
+
+### Step 1: Detect OS
+
+- Windows -> winget commands below.
+- macOS / Linux -> Unix commands below.
+
+Skip any tool that `git --version` / `uv --version` / `julia --version` already finds.
+
+### Step 2: Git
+
+Windows:
+
+```powershell
+winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements
+```
+
+Unix: install Git from the OS package manager if missing (`git --version`).
+
+### Step 3: uv
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Unix:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+If uv exists but is older than 0.8, run `uv self update`. Confirm `uv --version`.
+
+### Step 4: Julia
+
+Windows (juliaup via Microsoft Store):
+
+```powershell
+winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore --accept-package-agreements --accept-source-agreements
+```
+
+If Store is blocked:
+
+```powershell
+Add-AppxPackage -AppInstallerFile https://install.julialang.org/Julia.appinstaller
+```
+
+Unix:
+
+```bash
+curl -fsSL https://install.julialang.org | sh
+```
+
+Confirm `julia --version` (1.10+ is fine).
+
+### Step 5: Python 3.13 project env
+
+Work in the repo root. This repo already has `pyproject.toml`, `uv.lock`, and `.python-version`. Do not `uv init`.
+
+```bash
+uv python install 3.13
+uv python pin 3.13
+uv sync
+```
+
+`uv run python --version` must be 3.13.x, not 3.14.
+
+### Step 6: Wflow.jl
+
+```bash
+julia -e "using Pkg; Pkg.add(\"Wflow\")"
+```
+
+On PowerShell, pipe the script instead if quoting fails:
+
+```powershell
+@'
+using Pkg
+Pkg.add("Wflow")
+'@ | julia
+```
+
+Require Wflow **1.x** (1.0.4 or newer). If the registry resolves 0.8.x:
+
+```bash
+julia -e "using Pkg; Pkg.add(name=\"Wflow\", version=\"1.0.4\")"
+```
+
+First `using Wflow` may take several minutes (precompile).
+
+### Step 7: Verify
+
+```bash
+python .agents/skills/hydrology-env/scripts/verify_env.py
+```
+
+If it fails: read the FAIL row, fix only that component, re-run the script. Do not proceed with course work until exit code 0.
+
+Expected plugins in `uv run hydromt --plugins`: `wflow_sbm`, `wflow_sediment`.
+
+## Version gates
+
+| Component | Gate |
+|-----------|------|
+| Python (via `uv run`) | 3.13.x, not 3.14 |
+| hydromt | >= 1.4.1 |
+| hydromt_wflow | >= 1.1.0 |
+| Wflow.jl | 1.x (>= 1.0.4) |
+
+## Troubleshooting
+
+- **Command not found after install**: PATH not refreshed. New terminal, then retry.
+- **conda on PATH**: ignore it. Use `uv run` only. Do not `conda activate`.
+- **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
+- **Wflow 0.8.x**: pin 1.0.4 as in Step 6. HydroMT-Wflow 1.x models will not run on 0.8.
+- **Julia Store blocked (Windows)**: App Installer fallback in Step 4.
