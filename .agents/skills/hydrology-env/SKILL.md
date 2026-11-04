@@ -1,6 +1,6 @@
 ---
 name: hydrology-env
-description: Installs and verifies the hydrology training stack (Git, uv, Julia, Python 3.13, hydromt, hydromt_wflow, Wflow.jl). Use when setting up the course environment, installing hydromt or wflow, creating the project venv, or checking package versions.
+description: Installs and verifies the hydrology training stack (Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl). Use when setting up the course environment, installing hydromt or wflow, creating the project venv, or checking package versions.
 ---
 
 # Hydrology training environment
@@ -46,7 +46,7 @@ After every install step that changes PATH, open a new shell or prepend the inst
 - Windows -> winget commands below.
 - macOS / Linux -> Unix commands below.
 
-Skip any tool that `git --version` / `uv --version` / `julia --version` already finds.
+Skip Git or Julia if already on PATH. Always ensure uv is **>= 0.13.6** (emSign CA incident).
 
 ### Step 2: Git
 
@@ -72,7 +72,7 @@ Unix:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-If uv exists but is older than 0.8, run `uv self update`. Confirm `uv --version`.
+If uv is missing, install with the commands above. If it exists, run `uv self update`. Confirm `uv --version` is **0.13.6 or newer**.
 
 ### Step 4: Julia
 
@@ -101,12 +101,14 @@ Confirm `julia --version` (1.10+ is fine).
 Work in the repo root. This repo already has `pyproject.toml`, `uv.lock`, and `.python-version`. Do not `uv init`.
 
 ```bash
-uv python install 3.13
-uv python pin 3.13
+uv python install 3.13.18
+uv python pin 3.13.18
 uv sync
 ```
 
-`uv run python --version` must be 3.13.x, not 3.14.
+If `.venv` was created with an older 3.13, remove it and run `uv sync` again.
+
+`uv run python --version` must be **3.13.18 or newer 3.13.x**, not 3.14.
 
 ### Step 6: Wflow.jl
 
@@ -145,7 +147,9 @@ Expected plugins in `uv run hydromt --plugins`: `wflow_sbm`, `wflow_sediment`.
 
 | Component | Gate |
 |-----------|------|
-| Python (via `uv run`) | 3.13.x, not 3.14 |
+| uv | >= 0.13.6 |
+| Python (via `uv run`) | 3.13.18+ (not 3.14) |
+| certifi | >= 2026.10.19 |
 | hydromt | >= 1.4.1 |
 | hydromt_wflow | >= 1.1.0 |
 | Wflow.jl | 1.x (>= 1.0.4) |
@@ -154,6 +158,7 @@ Expected plugins in `uv run hydromt --plugins`: `wflow_sbm`, `wflow_sediment`.
 
 - **Command not found after install**: PATH not refreshed. New terminal, then retry.
 - **conda on PATH**: ignore it. Use `uv run` only. Do not `conda activate`.
+- **uv older than 0.13.6 or Python older than 3.13.18**: emSign CA incident. `uv self update`, then `uv python install 3.13.18` and recreate `.venv`.
 - **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
 - **Wflow 0.8.x**: pin 1.0.4 as in Step 6. HydroMT-Wflow 1.x models will not run on 0.8.
 - **Julia Store blocked (Windows)**: App Installer fallback in Step 4.

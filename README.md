@@ -23,7 +23,7 @@ Install and verify the hydrology training environment using the hydrology-env sk
 To check an existing install:
 
 ```
-Verify the hydrology-env skill: Git, uv, Julia, Python 3.13, hydromt, hydromt_wflow, and Wflow.jl.
+Verify the hydrology-env skill: Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, and Wflow.jl.
 ```
 
 The agent should follow the skill and run `python .agents/skills/hydrology-env/scripts/verify_env.py`. If a tool installer changes PATH, open a new terminal and ask it to verify again.
@@ -54,11 +54,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -fsSL https://install.julialang.org | sh
 ```
 
-Open a **new** terminal so Git, uv, and Julia are on PATH. Check:
+Open a **new** terminal so Git, uv, and Julia are on PATH. Then:
 
 ```bash
+uv self update
 git --version
-uv --version
+uv --version   # need 0.13.6 or newer
 julia --version
 ```
 
@@ -67,8 +68,8 @@ julia --version
 From the repo root (do not run `uv init`):
 
 ```bash
-uv python install 3.13
-uv python pin 3.13
+uv python install 3.13.18
+uv python pin 3.13.18
 uv sync
 ```
 
@@ -97,13 +98,14 @@ Need Wflow **1.x** (1.0.4 or newer), not 0.8.
 python .agents/skills/hydrology-env/scripts/verify_env.py
 ```
 
-All rows must be `OK` before course exercises. The script checks Git, uv, Julia, Python 3.13, hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), and Wflow.jl 1.x.
+All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.13.6), Julia, Python 3.13.18+, certifi (>= 2026.10.19), hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), and Wflow.jl 1.x.
 
 ## Troubleshooting
 
 - **Command not found after install**: PATH was not refreshed. Open a new terminal.
 - **conda still on PATH**: ignore it. Use `uv run ...`. Do not `conda activate`.
-- **Python 3.14**: hydromt_wflow does not support it. Stay on 3.13.
+- **Python 3.14**: hydromt_wflow does not support it. Stay on 3.13.18+.
+- **uv < 0.13.6 or Python < 3.13.18**: emSign CA incident. Run `uv self update`, then `uv python install 3.13.18` and recreate `.venv`.
 - **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
 - **Wflow 0.8.x**: pin the Julia package:
 

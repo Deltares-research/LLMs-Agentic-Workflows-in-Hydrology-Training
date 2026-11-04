@@ -1,6 +1,6 @@
 # Claude Code
 
-This is a uv + Julia hydrology training repo. Python 3.13 only. Never conda, miniforge, mamba, or pixi.
+This is a uv + Julia hydrology training repo. Python 3.13.18+ only. uv >= 0.13.6. Never conda, miniforge, mamba, or pixi.
 
 For environment setup, hydromt/wflow install, or version checks, read and follow `.agents/skills/hydrology-env/SKILL.md` (project skills live there, not under `.claude/skills/`). Then execute:
 

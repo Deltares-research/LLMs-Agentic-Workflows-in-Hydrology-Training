@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+MIN_UV = (0, 13, 6)
+MIN_PYTHON = (3, 13, 18)
+MIN_CERTIFI = (2026, 10, 19)
 MIN_HYDROMT = (1, 4, 1)
 MIN_HYDROMT_WFLOW = (1, 1, 0)
 MIN_WFLOW_JL = (1, 0, 4)
@@ -61,6 +64,20 @@ def check_which(name: str) -> tuple[bool, str]:
     return True, first
 
 
+def check_uv() -> tuple[bool, str]:
+    ok, detail = check_which("uv")
+    if not ok:
+        return False, detail
+    version = parse_version(detail)
+    if version is None:
+        return False, detail
+    if not version_gte(version, MIN_UV):
+        return False, (
+            f"{detail} (need uv >= {'.'.join(map(str, MIN_UV))}; run uv self update)"
+        )
+    return True, detail
+
+
 def check_project_python() -> tuple[bool, str]:
     proc = run(["uv", "run", "python", "--version"])
     text = combined(proc)
@@ -69,36 +86,42 @@ def check_project_python() -> tuple[bool, str]:
     version = parse_version(text)
     if version is None:
         return False, text
-    if version[0] != 3 or version[1] != 13:
-        return False, f"{text.strip()} (need Python 3.13.x, not 3.14+)"
+    if version[0] != 3 or version[1] != 13 or not version_gte(version, MIN_PYTHON):
+        return False, (
+            f"{text.strip()} (need Python >= {'.'.join(map(str, MIN_PYTHON))}, not 3.14)"
+        )
     return True, text.splitlines()[0]
 
 
 def check_python_packages() -> tuple[bool, str]:
     code = (
-        "import hydromt, hydromt_wflow; "
+        "import certifi, hydromt, hydromt_wflow; "
+        "print(certifi.__version__); "
         "print(hydromt.__version__); "
         "print(hydromt_wflow.__version__)"
     )
     proc = run(["uv", "run", "python", "-c", code])
     text = combined(proc)
     if proc.returncode != 0:
-        return False, text or "failed to import hydromt / hydromt_wflow"
+        return False, text or "failed to import certifi / hydromt / hydromt_wflow"
     lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    if len(lines) < 2:
+    if len(lines) < 3:
         return False, text
-    hydromt_v = parse_version(lines[0])
-    plugin_v = parse_version(lines[1])
-    if hydromt_v is None or plugin_v is None:
+    certifi_v = parse_version(lines[0])
+    hydromt_v = parse_version(lines[1])
+    plugin_v = parse_version(lines[2])
+    if certifi_v is None or hydromt_v is None or plugin_v is None:
         return False, text
     problems = []
+    if not version_gte(certifi_v, MIN_CERTIFI):
+        problems.append(f"certifi {lines[0]} < {'.'.join(map(str, MIN_CERTIFI))}")
     if not version_gte(hydromt_v, MIN_HYDROMT):
-        problems.append(f"hydromt {lines[0]} < {'.'.join(map(str, MIN_HYDROMT))}")
+        problems.append(f"hydromt {lines[1]} < {'.'.join(map(str, MIN_HYDROMT))}")
     if not version_gte(plugin_v, MIN_HYDROMT_WFLOW):
         problems.append(
-            f"hydromt_wflow {lines[1]} < {'.'.join(map(str, MIN_HYDROMT_WFLOW))}"
+            f"hydromt_wflow {lines[2]} < {'.'.join(map(str, MIN_HYDROMT_WFLOW))}"
         )
-    detail = f"hydromt {lines[0]}, hydromt_wflow {lines[1]}"
+    detail = f"certifi {lines[0]}, hydromt {lines[1]}, hydromt_wflow {lines[2]}"
     if problems:
         return False, f"{detail} ({'; '.join(problems)})"
     return True, detail
@@ -141,10 +164,10 @@ def main() -> int:
 
     checks = [
         ("Git", lambda: check_which("git")),
-        ("uv", lambda: check_which("uv")),
+        ("uv", check_uv),
         ("Julia", lambda: check_which("julia")),
-        ("Python 3.13 (uv run)", check_project_python),
-        ("hydromt + hydromt_wflow", check_python_packages),
+        ("Python 3.13.18+ (uv run)", check_project_python),
+        ("certifi + hydromt + hydromt_wflow", check_python_packages),
         ("hydromt wflow plugins", check_plugins),
         ("Wflow.jl 1.x", check_wflow_jl),
     ]
