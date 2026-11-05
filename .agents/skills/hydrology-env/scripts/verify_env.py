@@ -93,6 +93,27 @@ def check_project_python() -> tuple[bool, str]:
     return True, text.splitlines()[0]
 
 
+def check_ie_packages() -> tuple[bool, str]:
+    code = (
+        "import dllmforge, dotenv, ipykernel, jupyter; "
+        "print(getattr(dllmforge, '__version__', 'imported')); "
+        "print('dotenv'); "
+        "print('ipykernel'); "
+        "print('jupyter')"
+    )
+    proc = run(["uv", "run", "python", "-c", code])
+    text = combined(proc)
+    if proc.returncode != 0:
+        return False, (
+            text
+            or "failed to import dllmforge / dotenv / ipykernel / jupyter "
+            "(uv sync; GitHub access needed for Deltares-research/DLLMForge)"
+        )
+    lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    version = lines[0] if lines else "imported"
+    return True, f"dllmforge {version}, dotenv, ipykernel, jupyter"
+
+
 def check_python_packages() -> tuple[bool, str]:
     code = (
         "import certifi, hydromt, hydromt_wflow; "
@@ -168,6 +189,7 @@ def main() -> int:
         ("Julia", lambda: check_which("julia")),
         ("Python 3.13.18+ (uv run)", check_project_python),
         ("certifi + hydromt + hydromt_wflow", check_python_packages),
+        ("dllmforge + dotenv + jupyter", check_ie_packages),
         ("hydromt wflow plugins", check_plugins),
         ("Wflow.jl 1.x", check_wflow_jl),
     ]

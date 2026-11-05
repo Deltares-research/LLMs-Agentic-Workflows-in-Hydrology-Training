@@ -222,3 +222,6 @@ __marimo__/
 # HydroMT clipped extract and generated Wflow models (keep local, do not commit)
 #hydromt_data/
 wflow_moselle_epinal/
+
+# Exercise extraction outputs (keep the folder via .gitkeep)
+exercises/**/output/*.json

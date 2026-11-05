@@ -1,6 +1,6 @@
 # LLMs and agentic workflows in hydrology
 
-Training repo for HydroMT-Wflow model setup/update and Wflow.jl runs, using coding agents.
+Training repo for [Hydrology Software Days (Day 3) - LLMs and Agentic Workflows in Hydrology Training](https://softwaredays.deltares.nl/-/hydrology-software-days-day-3-llms-and-agentic-workflows-in-hydrology-training-afternoon-2026).
 
 Python packages live in a project `.venv` managed by uv. Git, uv, and Julia are system tools. Wflow is a **Julia** package (`Wflow.jl` 1.x), not a Python import.
 
@@ -23,7 +23,7 @@ Install and verify the hydrology training environment using the hydrology-env sk
 To check an existing install:
 
 ```
-Verify the hydrology-env skill: Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, and Wflow.jl.
+Verify the hydrology-env skill: Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl, DLLMForge, python-dotenv, and jupyter.
 ```
 
 The agent should follow the skill and run `python .agents/skills/hydrology-env/scripts/verify_env.py`. If a tool installer changes PATH, open a new terminal and ask it to verify again.
@@ -98,7 +98,7 @@ Need Wflow **1.x** (1.0.4 or newer), not 0.8.
 python .agents/skills/hydrology-env/scripts/verify_env.py
 ```
 
-All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.13.6), Julia, Python 3.13.18+, certifi (>= 2026.10.19), hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), and Wflow.jl 1.x.
+All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.13.6), Julia, Python 3.13.18+, certifi (>= 2026.10.19), hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), DLLMForge / python-dotenv / jupyter, and Wflow.jl 1.x.
 
 ## Troubleshooting
 
@@ -107,11 +107,16 @@ All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.1
 - **Python 3.14**: hydromt_wflow does not support it. Stay on 3.13.18+.
 - **uv < 0.13.6 or Python < 3.13.18**: emSign CA incident. Run `uv self update`, then `uv python install 3.13.18` and recreate `.venv`.
 - **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
+- **`import dllmforge` fails**: `uv sync` needs GitHub access to `Deltares-research/DLLMForge`. Azure keys stay in `.env`; they are not part of the skill.
 - **Wflow 0.8.x**: pin the Julia package:
 
   ```bash
   julia -e "using Pkg; Pkg.add(name=\"Wflow\", version=\"1.0.4\")"
   ```
+
+## Exercise 1: information extraction
+
+After verify is green and `.env` has Azure OpenAI variables, see [exercises/01_information_extraction/](exercises/01_information_extraction/).
 
 ## Run a model
 
