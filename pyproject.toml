@@ -4,6 +4,13 @@ version = "0.1.0"
 requires-python = ">=3.13.18,<3.14"
 dependencies = [
     "certifi>=2026.10.19",
+    "dllmforge[api,docling]",
     "hydromt>=1.4.1",
     "hydromt-wflow>=1.1.0",
+    "ipykernel>=7.4.0",
+    "jupyter>=1.1.1",
+    "python-dotenv>=1.2.4",
 ]
+
+[tool.uv.sources]
+dllmforge = { git = "https://github.com/Deltares-research/DLLMForge.git", rev = "c2b58f44f55621163add7756de5530b1b2f3acfe" }
