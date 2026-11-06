@@ -98,7 +98,7 @@ Confirm `julia --version` (1.10+ is fine).
 
 ### Step 5: Python 3.13 project env
 
-Work in the repo root. This repo already has `pyproject.toml`, `uv.lock`, and `.python-version`. Do not `uv init`. `uv sync` also installs `dllmforge[api]` from GitHub plus `python-dotenv` and jupyter.
+Work in the repo root. This repo already has `pyproject.toml`, `uv.lock`, and `.python-version`. Do not `uv init`. `uv sync` also installs `dllmforge[api,docling]` from GitHub plus `python-dotenv` and jupyter.
 
 ```bash
 uv python install 3.13.18
@@ -142,7 +142,7 @@ python .agents/skills/hydrology-env/scripts/verify_env.py
 If it fails: read the FAIL row, fix only that component, re-run the script. Do not proceed with course work until exit code 0.
 
 Expected plugins in `uv run hydromt --plugins`: `wflow_sbm`, `wflow_sediment`.
-Expected Python imports via `uv run`: `dllmforge`, `dotenv`, `ipykernel`, `jupyter`.
+Expected Python imports via `uv run`: `dllmforge`, `docling`, `dotenv`, `ipykernel`, `jupyter`.
 
 ## Version gates
 
@@ -154,7 +154,7 @@ Expected Python imports via `uv run`: `dllmforge`, `dotenv`, `ipykernel`, `jupyt
 | hydromt | >= 1.4.1 |
 | hydromt_wflow | >= 1.1.0 |
 | Wflow.jl | 1.x (>= 1.0.4) |
-| dllmforge | importable (`[api]` extra from git) |
+| dllmforge | importable (`[api,docling]` extra from git, 0.1.1+) |
 | python-dotenv | importable (`dotenv`) |
 | jupyter / ipykernel | importable |
 
@@ -166,4 +166,4 @@ Expected Python imports via `uv run`: `dllmforge`, `dotenv`, `ipykernel`, `jupyt
 - **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
 - **Wflow 0.8.x**: pin 1.0.4 as in Step 6. HydroMT-Wflow 1.x models will not run on 0.8.
 - **Julia Store blocked (Windows)**: App Installer fallback in Step 4.
-- **`import dllmforge` fails**: `uv sync` could not install `dllmforge[api]` from `https://github.com/Deltares-research/DLLMForge.git`. Confirm GitHub access to that repo, then re-run `uv sync` from the repo root. Do not put Azure keys in this skill; they belong in `.env`.
+- **`import dllmforge` or `import docling` fails**: `uv sync` could not install `dllmforge[api,docling]` from `https://github.com/Deltares-research/DLLMForge.git`. Confirm GitHub access to that repo, then re-run `uv sync` from the repo root. Do not put Azure keys in this skill; they belong in `.env`.

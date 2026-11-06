@@ -107,7 +107,7 @@ All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.1
 - **Python 3.14**: hydromt_wflow does not support it. Stay on 3.13.18+.
 - **uv < 0.13.6 or Python < 3.13.18**: emSign CA incident. Run `uv self update`, then `uv python install 3.13.18` and recreate `.venv`.
 - **`import wflow` in Python**: wrong package. Use Julia `using Wflow`.
-- **`import dllmforge` fails**: `uv sync` needs GitHub access to `Deltares-research/DLLMForge`. Azure keys stay in `.env`; they are not part of the skill.
+- **`import dllmforge` or `import docling` fails**: `uv sync` needs GitHub access to `Deltares-research/DLLMForge` (`dllmforge[api,docling]`, pinned in `pyproject.toml`). Azure keys stay in `.env`; they are not part of the skill.
 - **Wflow 0.8.x**: pin the Julia package:
 
   ```bash

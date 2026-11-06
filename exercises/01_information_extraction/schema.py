@@ -47,7 +47,8 @@ class WaterRetentionBasin(BaseModel):
         None,
         description=(
             "Total reported storage volume in cubic metres (m³). "
-            "Convert hm³ or Mm³ to m³. ONLY extract if explicitly associated with this basin."
+            "Convert hm³ or Mm³ to m³. Expand 25 × 10^6 m³ to 25000000. "
+            "ONLY extract if explicitly associated with this basin."
         ),
     )
     basin_control_type: Optional[str] = Field(
@@ -74,39 +75,18 @@ class WaterRetentionBasin(BaseModel):
             "filling or release. Controlled basins; leave null if not stated."
         ),
     )
-    activation_discharge_m3_s: Optional[float] = Field(
-        None,
-        description=(
-            "River discharge threshold in m³/s at which the basin starts filling. "
-            "Controlled basins; leave null if not stated."
-        ),
-    )
-    activation_water_level_m: Optional[float] = Field(
-        None,
-        description=(
-            "Water-level threshold in metres that triggers filling. "
-            "Controlled basins; leave null if not stated."
-        ),
-    )
-    inlet_cross_section_m2: Optional[float] = Field(
-        None, description="Inlet cross-section in m². Null if not stated."
-    )
-    inlet_capacity_m3_s: Optional[float] = Field(
-        None, description="Maximum inlet capacity in m³/s. Null if not stated."
-    )
-
     source_page: Optional[int] = Field(
         None,
         description=(
-            "PDF page number from the [PAGE N] marker in the extracted text. "
-            "Do not guess. Use the marker index, not journal pagination."
+            "Leave null. DLLMForge fills this from source_quote against Docling "
+            "page provenance (PDF sheet index, not journal pagination)."
         ),
     )
     source_quote: Optional[str] = Field(
         None,
         description=(
-            "Verbatim sentence or short paragraph copied from the document "
-            "(not paraphrased) that supports this basin record."
+            "One verbatim sentence or markdown table row copied from the document "
+            "(not paraphrased, not several blocks concatenated) that supports this "
         ),
     )
 

@@ -95,8 +95,9 @@ def check_project_python() -> tuple[bool, str]:
 
 def check_ie_packages() -> tuple[bool, str]:
     code = (
-        "import dllmforge, dotenv, ipykernel, jupyter; "
+        "import dllmforge, docling, dotenv, ipykernel, jupyter; "
         "print(getattr(dllmforge, '__version__', 'imported')); "
+        "print('docling'); "
         "print('dotenv'); "
         "print('ipykernel'); "
         "print('jupyter')"
@@ -106,12 +107,12 @@ def check_ie_packages() -> tuple[bool, str]:
     if proc.returncode != 0:
         return False, (
             text
-            or "failed to import dllmforge / dotenv / ipykernel / jupyter "
+            or "failed to import dllmforge / docling / dotenv / ipykernel / jupyter "
             "(uv sync; GitHub access needed for Deltares-research/DLLMForge)"
         )
     lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
     version = lines[0] if lines else "imported"
-    return True, f"dllmforge {version}, dotenv, ipykernel, jupyter"
+    return True, f"dllmforge {version}, docling, dotenv, ipykernel, jupyter"
 
 
 def check_python_packages() -> tuple[bool, str]:
