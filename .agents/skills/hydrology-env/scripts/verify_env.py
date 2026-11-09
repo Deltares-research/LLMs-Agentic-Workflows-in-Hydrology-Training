@@ -115,6 +115,26 @@ def check_ie_packages() -> tuple[bool, str]:
     return True, f"dllmforge {version}, docling, dotenv, ipykernel, jupyter"
 
 
+def check_agent_packages() -> tuple[bool, str]:
+    """Exercise 2: LangGraph, LangChain providers, Claude Agent SDK (bundles the Claude Code CLI), Streamlit."""
+    code = (
+        "import importlib.metadata as m, pathlib, claude_agent_sdk as c; "
+        "import langgraph, langchain_anthropic, langchain_openai, streamlit, streamlit_flow, tomlkit, typer; "
+        "b = pathlib.Path(c.__file__).parent / '_bundled'; "
+        "print(m.version('langgraph'), m.version('claude-agent-sdk'), m.version('streamlit'), "
+        "'cli-bundled' if any(b.glob('claude*')) else 'cli-missing')"
+    )
+    proc = run(["uv", "run", "python", "-c", code])
+    text = combined(proc)
+    if proc.returncode != 0:
+        return False, text or "failed to import langgraph / claude_agent_sdk / streamlit (run uv sync)"
+    parts = proc.stdout.strip().split()
+    if parts and parts[-1] == "cli-missing":
+        return False, "claude-agent-sdk installed but its bundled Claude Code CLI is missing (reinstall: uv sync --reinstall-package claude-agent-sdk)"
+    lg, sdk, stl, _ = (parts + ["?"] * 4)[:4]
+    return True, f"langgraph {lg}, claude-agent-sdk {sdk}, streamlit {stl}"
+
+
 def check_python_packages() -> tuple[bool, str]:
     code = (
         "import certifi, hydromt, hydromt_wflow; "
@@ -191,6 +211,7 @@ def main() -> int:
         ("Python 3.13.18+ (uv run)", check_project_python),
         ("certifi + hydromt + hydromt_wflow", check_python_packages),
         ("dllmforge + dotenv + jupyter", check_ie_packages),
+        ("agents: langgraph + claude-agent-sdk + streamlit", check_agent_packages),
         ("hydromt wflow plugins", check_plugins),
         ("Wflow.jl 1.x", check_wflow_jl),
     ]

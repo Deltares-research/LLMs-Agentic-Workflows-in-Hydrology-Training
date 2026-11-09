@@ -225,3 +225,10 @@ wflow_moselle_epinal/
 
 # Exercise extraction outputs (keep the folder via .gitkeep)
 exercises/**/output/*.json
+
+# Exercise 2 agent outputs (runs, plots, harness workspaces, twin truth)
+exercises/02_agentic_workflows/output/*
+!exercises/02_agentic_workflows/output/.gitkeep
+
+# GDAL sidecar files written when HydroMT reads rasters
+hydromt_data/*.aux.xml
