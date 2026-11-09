@@ -31,7 +31,7 @@ from hydroagent.builder.compile import make_custom_session, validate  # noqa: E4
 from hydroagent.builder.nodes import NODE_TYPES, TOOL_ACTIONS  # noqa: E402
 from hydroagent.builder.templates import TEMPLATES  # noqa: E402
 from hydroagent.harness.claude_runner import available_skills, run_harness  # noqa: E402
-from hydroagent.tracing import Recorder  # noqa: E402
+from hydroagent.tracing import Event, Recorder  # noqa: E402
 
 st.set_page_config(page_title="Agentic hydrology - Exercise 2", layout="wide")
 C.load_env()
@@ -44,7 +44,7 @@ NODE_KIND = {"simulate": "code", "plan": "code", "finalize": "code", "blocked": 
              "model": "agent", "modeller": "agent", "analyst": "agent", "parameter_scenario": "agent",
              "__start__": "io", "__end__": "io"}
 EVENT_ICON = {"llm": "🧠", "tool_call": "🔧", "tool_result": "📄", "node": "▶️", "human": "🙋", "error": "⛔",
-              "harness": "🤖", "final": "✅", "info": "ℹ️"}
+              "harness": "🤖", "final": "✅", "info": "ℹ️", "model": "🌊"}
 
 
 # ----------------------------------------------------------------------------------------------- helpers
@@ -69,13 +69,22 @@ def sidebar() -> dict:
     st.sidebar.write(("✅" if base else "⏳") + " baseline run")
     srv = W._SERVER is not None and W._SERVER.proc is not None and W._SERVER.proc.poll() is None
     st.sidebar.write(("✅" if srv else "💤") + " Wflow (Julia) warm" + (f" v{W._SERVER.version}" if srv else ""))
+    st.sidebar.toggle("Stream HydroMT / Wflow console output", True, key="show_model_log")
+
+    def with_model_log(fn):
+        def go(on_ev):
+            W.LOG_SINK.set(lambda src, line: on_ev(Event("model", src, line)))
+            return fn()
+        return go
+
     if not ready and st.sidebar.button("Build base model (HydroMT, ~2 min)"):
-        with st.spinner("hydromt build + update ..."):
-            W.prepare_base_model()
+        box = st.status("hydromt build + update ...", expanded=True)
+        run_live(with_model_log(W.prepare_base_model), box)
         st.rerun()
     if ready and (not base or not srv) and st.sidebar.button("Warm up Wflow (baseline run)"):
-        with st.spinner("Starting Julia and running the baseline (first time ~1.5 min) ..."):
-            W.get_server().run(W.ensure_baseline().path / "wflow_sbm.toml") if base else W.ensure_baseline()
+        box = st.status("Starting Julia and running the baseline (first time ~1.5 min) ...", expanded=True)
+        run_live(with_model_log(lambda: W.get_server().run(W.ensure_baseline().path / "wflow_sbm.toml")
+                                if base else W.ensure_baseline()), box)
         st.rerun()
     return {"provider": provider}
 
@@ -120,12 +129,24 @@ def run_live(fn, container) -> object:
 
     t = threading.Thread(target=target, daemon=True)
     t.start()
+    show_model = st.session_state.get("show_model_log", True)
+    console, lines = None, []
     with container:
         while t.is_alive() or not q.empty():
             try:
                 ev = q.get(timeout=0.3)
             except queue.Empty:
                 continue
+            if ev.kind == "model":
+                # consecutive HydroMT/Wflow lines go into one scrolling console block
+                if not show_model:
+                    continue
+                if console is None:
+                    console, lines = st.empty(), []
+                lines.append(f"[{ev.title}] {ev.detail}")
+                console.code("\n".join(lines[-20:]), language=None)
+                continue
+            console = None
             render_event(ev)
     if "err" in box:
         raise box["err"]
@@ -254,8 +275,14 @@ def page_architectures(cfg):
         else:
             show_outcome(out, key)
             with st.expander("Full trace"):
-                for ev in act["session"].rec.events:
-                    render_event(ev)
+                evs = act["session"].rec.events
+                model_lines = [f"[{e.title}] {e.detail}" for e in evs if e.kind == "model"]
+                for ev in evs:
+                    if ev.kind != "model":
+                        render_event(ev)
+                if model_lines:
+                    st.markdown(f"🌊 **HydroMT / Wflow console** ({len(model_lines)} lines)")
+                    st.code("\n".join(model_lines[-400:]), language=None)
 
 
 # ----------------------------------------------------------------------------------------------- page 2

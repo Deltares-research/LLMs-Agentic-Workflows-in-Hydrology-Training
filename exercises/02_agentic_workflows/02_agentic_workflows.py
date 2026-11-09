@@ -5,6 +5,8 @@
 #     text_representation:
 #       extension: .py
 #       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.6
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -65,9 +67,13 @@ print("settings:", C.get_settings(provider=PROVIDER))
 
 
 def show(ev):
-    """Print the agent's trace as it happens. Comment out kinds you find noisy."""
-    if ev.kind in ("llm", "tool_call", "node", "human", "error", "harness"):
+    """Print the agent's trace as it happens. Remove kinds you find noisy ("model" = HydroMT/Wflow console)."""
+    if ev.kind in ("llm", "tool_call", "node", "human", "error", "harness", "model"):
         print(f"[{ev.kind}] {ev.title}: {ev.detail[:250]}")
+
+
+# Stream HydroMT / Wflow console output also when you call the model functions directly (Step 1).
+W.LOG_SINK.set(lambda source, line: print(f"  [{source}] {line}"))
 
 
 def report(out):

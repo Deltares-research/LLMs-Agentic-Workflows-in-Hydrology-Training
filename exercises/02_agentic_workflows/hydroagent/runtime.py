@@ -17,6 +17,7 @@ from typing import Any, Callable
 from langgraph.types import Command
 
 from .tools import ARTIFACTS
+from .wflow_tools import LOG_SINK
 from .tracing import Recorder
 
 
@@ -48,6 +49,7 @@ class GraphSession:
 
     def _invoke(self, payload) -> Outcome:
         token = ARTIFACTS.set(self.artifacts)
+        log_token = LOG_SINK.set(self.rec.model_sink())  # stream HydroMT/Wflow console output into the trace
         try:
             for chunk in self.graph.stream(payload, self.config, stream_mode="updates"):
                 for node, upd in (chunk or {}).items():
@@ -61,6 +63,7 @@ class GraphSession:
                            run_ids=list(self.artifacts.get("run_ids", [])), plots=list(self.artifacts.get("plots", [])))
         finally:
             ARTIFACTS.reset(token)
+            LOG_SINK.reset(log_token)
         snap = self.graph.get_state(self.config)
         values = dict(snap.values or {})
         interrupts = [i for t in (snap.tasks or []) for i in (getattr(t, "interrupts", None) or [])]

@@ -188,6 +188,7 @@ async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns:
     from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher, ResultMessage,
                                   SystemMessage, TextBlock, ToolResultBlock, ToolUseBlock, UserMessage)
 
+    W.LOG_SINK.set(rec.model_sink())  # Wflow console output from MCP tool calls -> trace
     s = C.get_settings()
     run_ids: list[str] = []
     skills_loaded: list[str] = []

@@ -21,6 +21,7 @@ import subprocess
 import threading
 import time
 import uuid
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -111,6 +112,68 @@ def find_julia() -> str:
     return exe
 
 
+class ModelLog:
+    """Forwards console lines of HydroMT / Wflow to the current trace (``LOG_SINK``), throttling progress bars.
+
+    ``LOG_SINK`` is a context variable holding ``callable(source, line)``. Sessions set it, so model output
+    shows up in the same live trace as LLM and tool calls (Streamlit, notebook, CLI)."""
+
+    _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+    _PCT = re.compile(r"Progress:\s+(\d+)%")
+
+    def __init__(self, source: str, sink=None, step: int = 10):
+        self.source = source
+        self.sink = sink if sink is not None else LOG_SINK.get()
+        self.step = step
+        self.last_pct = -step
+        self.buffer: list[str] = []
+
+    def __call__(self, raw: str) -> None:
+        line = self._ANSI.sub("", raw).rstrip()
+        if not line.strip():
+            return
+        self.buffer.append(line)
+        if not self.sink:
+            return
+        # Julia logging prints multi-line blocks: "┌ Info: ...", "│ ...", "└ ...". Join them into one line.
+        head = line[:1]
+        if head == "┌":
+            self._block = [line[1:].strip()]
+            return
+        if head in ("│", "└") and getattr(self, "_block", None) is not None:
+            part = line[1:].strip()
+            if not part.startswith("@ "):  # drop source-location lines
+                self._block.append(part)
+            if head == "└":
+                line, self._block = " ".join(self._block), None
+            else:
+                return
+        elif head == "└":  # stray source-location line
+            return
+        if line.startswith("[ "):
+            line = line[2:]
+        m = self._PCT.search(line)
+        if m:  # progress bar: only every `step` %
+            pct = int(m.group(1))
+            if pct < self.last_pct:  # a new run started on the warm server
+                self.last_pct = -self.step
+            if pct == self.last_pct or (pct < 100 and pct - self.last_pct < self.step):
+                return
+            self.last_pct = pct
+            line = f"progress {pct}%"
+        elif self.source == "hydromt":
+            if " - DEBUG - " in line or line.startswith(("Error in sys.excepthook", "Original exception was")):
+                return  # debug chatter / harmless interpreter-shutdown noise
+            line = re.sub(r"^\S+ \S+ - [\w.]+ - \w+ - (\w+) - ", r"\1 ", line)  # drop timestamp/logger
+        try:
+            self.sink(self.source, line[:400])
+        except Exception:
+            pass
+
+
+LOG_SINK: ContextVar = ContextVar("LOG_SINK", default=None)
+
+
 class WflowServer:
     """Persistent Julia process running ``wflow_server.jl``. Thread-safe (one run at a time)."""
 
@@ -120,6 +183,15 @@ class WflowServer:
         self.lock = threading.Lock()
         self.version: str | None = None
         self.log_path = C.OUTPUT_DIR / "wflow_server.log"
+        self._current: ModelLog | None = None  # receives Julia stderr (Wflow logging + progress) while a run is active
+
+    def _pump_stderr(self) -> None:
+        for ln in self.proc.stderr:  # type: ignore[union-attr]
+            self._log.write(ln)
+            self._log.flush()
+            cur = self._current
+            if cur is not None:
+                cur(ln)
 
     def _start(self) -> None:
         C.ensure_dirs()
@@ -127,9 +199,13 @@ class WflowServer:
         self._log = open(self.log_path, "a", encoding="utf-8")
         self.proc = subprocess.Popen(
             [find_julia(), "-t", str(self.threads), str(script)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._log,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
         )
+        threading.Thread(target=self._pump_stderr, daemon=True).start()
+        sink = LOG_SINK.get()
+        if sink:
+            sink("wflow", "starting Julia + loading Wflow.jl (first time ~1 min) ...")
         line = self._read_marker(timeout=900)
         if not line.startswith("@@WFLOW_READY@@"):
             raise RuntimeError(f"Wflow server failed to start: {line}. See {self.log_path}")
@@ -159,9 +235,13 @@ class WflowServer:
             if self.proc is None or self.proc.poll() is not None:
                 self._start()
             assert self.proc and self.proc.stdin
-            self.proc.stdin.write(str(Path(toml_path).resolve()) + "\n")
-            self.proc.stdin.flush()
-            line = self._read_marker(timeout)
+            self._current = ModelLog("wflow")
+            try:
+                self.proc.stdin.write(str(Path(toml_path).resolve()) + "\n")
+                self.proc.stdin.flush()
+                line = self._read_marker(timeout)
+            finally:
+                self._current = None
             if not line.startswith("@@WFLOW_DONE@@"):
                 raise RuntimeError(line.replace("@@WFLOW_ERROR@@", "Wflow error:").strip())
 
@@ -195,13 +275,27 @@ def run_wflow_toml(toml_path: Path, mode: str | None = None, timeout: float = 90
         get_server().run(Path(toml_path), timeout=timeout)
     else:
         log = Path(toml_path).with_name("julia_stdout.log")
-        with open(log, "w", encoding="utf-8") as fh:
-            rc = subprocess.run([find_julia(), "-t", "4", "-e", "using Wflow; Wflow.run()", str(toml_path)],
-                                stdout=fh, stderr=subprocess.STDOUT, timeout=timeout).returncode
+        rc = _stream([find_julia(), "-t", "4", "-e", "using Wflow; Wflow.run()", str(toml_path)], log,
+                     ModelLog("wflow"), timeout=timeout)
         if rc != 0:
             tail = log.read_text(encoding="utf-8", errors="replace")[-1500:]
             raise RuntimeError(f"Wflow failed (exit {rc}):\n{tail}")
     return time.time() - t0
+
+
+def _stream(cmd: list[str], log: Path, forward: ModelLog, cwd: Path | None = None, timeout: float = 3600) -> int:
+    """Run a command, writing its combined output to ``log`` and forwarding each line to the trace."""
+    with open(log, "w", encoding="utf-8") as fh:
+        proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace", bufsize=1)
+        t0 = time.time()
+        for ln in proc.stdout:  # type: ignore[union-attr]
+            fh.write(ln)
+            forward(ln)
+            if time.time() - t0 > timeout:
+                proc.kill()
+                break
+        return proc.wait()
 
 
 # --------------------------------------------------------------------------------------
@@ -211,8 +305,10 @@ def run_wflow_toml(toml_path: Path, mode: str | None = None, timeout: float = 90
 
 def _hydromt(args: list[str], log: Path) -> None:
     exe = shutil.which("hydromt") or str(Path(os.sys.executable).with_name("hydromt"))
-    with open(log, "w", encoding="utf-8") as fh:
-        rc = subprocess.run([exe, *args], cwd=C.REPO_ROOT, stdout=fh, stderr=subprocess.STDOUT).returncode
+    fwd = ModelLog("hydromt")
+    if fwd.sink:
+        fwd.sink("hydromt", f"hydromt {' '.join(args[:2])} ...")
+    rc = _stream([exe, *args], log, fwd, cwd=C.REPO_ROOT)
     if rc != 0:
         raise RuntimeError(f"hydromt {' '.join(args[:2])} failed; see {log}")
 

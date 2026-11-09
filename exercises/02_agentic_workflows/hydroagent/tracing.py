@@ -16,7 +16,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 
 @dataclass
 class Event:
-    kind: str          # node | llm | tool_call | tool_result | human | info | error | harness | final
+    kind: str          # node | llm | tool_call | tool_result | model | human | info | error | harness | final
     title: str
     detail: str = ""
     t: float = field(default_factory=time.time)
@@ -48,6 +48,10 @@ class Recorder:
             except Exception:
                 pass
         return ev
+
+    def model_sink(self):
+        """Callable for ``wflow_tools.LOG_SINK``: model console output becomes 'model' events."""
+        return lambda source, line: self.emit("model", source, line)
 
     def add_usage(self, input_tokens: int = 0, output_tokens: int = 0, cost_usd: float = 0.0) -> None:
         self.input_tokens += int(input_tokens or 0)

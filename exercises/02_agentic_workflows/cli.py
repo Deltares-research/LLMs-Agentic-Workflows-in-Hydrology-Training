@@ -29,7 +29,7 @@ from hydroagent import config as C  # noqa: E402
 
 app = typer.Typer(add_completion=False, help=__doc__.split("\n")[0])
 
-COLOURS = {"llm": "cyan", "tool_call": "yellow", "tool_result": "white", "node": "magenta", "human": "green",
+COLOURS = {"model": "bright_black", "llm": "cyan", "tool_call": "yellow", "tool_result": "white", "node": "magenta", "human": "green",
            "error": "red", "final": "green", "harness": "blue", "info": "white"}
 
 
@@ -80,6 +80,7 @@ def prepare(force: bool = False):
     from hydroagent import twin
     from hydroagent import wflow_tools as W
 
+    W.LOG_SINK.set(lambda src, line: typer.secho(f"[{src}] {line}", fg="bright_black"))  # stream model output
     typer.echo("HydroMT build + forcing update ..." if force or not W.base_model_ready() else "Base model present.")
     W.prepare_base_model(force=force)
     typer.echo("Baseline run (first Julia start ~1-1.5 min) ...")
