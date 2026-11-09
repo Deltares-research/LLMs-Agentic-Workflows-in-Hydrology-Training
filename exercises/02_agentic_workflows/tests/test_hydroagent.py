@@ -73,3 +73,36 @@ def test_validate_catches_errors():
 def test_architecture_graphs_build(key):
     nodes, edges = R.graph_structure(key)
     assert "__start__" in nodes and "__end__" in nodes and edges
+
+
+def test_recorder_cost_and_time_split():
+    from hydroagent.tracing import Recorder
+
+    rec = Recorder(model="anthropic:claude-sonnet-5-5")
+    rec.add_llm("n1", input_tokens=1_000_000, output_tokens=100_000, seconds=2.0)
+    rec.add_llm("h", cache_read=1_000_000, model="anthropic:claude-sonnet-5-5")
+    rec.add_model_time(5.0)
+    s = rec.summary()
+    assert s["cost_usd"] == pytest.approx(2.0 + 1.0 + 0.2)
+    assert s["llm_s"] == 2.0 and s["model_s"] == 5.0 and s["wflow_runs"] == 1
+    unpriced = Recorder(model="azure:unknown-model")
+    unpriced.add_llm("n", input_tokens=10)
+    assert unpriced.cost_estimate()[0] is None
+
+
+def test_scoreboard_roundtrip(tmp_path, monkeypatch):
+    from hydroagent import scoreboard
+    from hydroagent.runtime import Outcome
+
+    monkeypatch.setattr(scoreboard, "FILE", tmp_path / "sb.jsonl")
+    u = {"model": "m", "total_tokens": 100, "llm_calls": 2, "wall_time_s": 3.0, "cost_usd": 0.01}
+    a = scoreboard.record("a0", "q", Outcome("done", answer="x", usage=u))
+    b = scoreboard.record("a1", "q", Outcome("done", answer="y", usage={**u, "total_tokens": 300}))
+    scoreboard.rate(a, 3)
+    scoreboard.rate(a, 5)  # latest rating wins
+    df = scoreboard.load().set_index("id")
+    assert df.loc[a, "quality"] == 5
+    assert pd.isna(df.loc[b, "quality"])  # not rated yet
+    df = df.reset_index()
+    summ = scoreboard.summary(df, "q")
+    assert set(summ["arch"]) == {"a0", "a1"}

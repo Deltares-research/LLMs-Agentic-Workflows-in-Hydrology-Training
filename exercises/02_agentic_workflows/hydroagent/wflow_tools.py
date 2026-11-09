@@ -32,6 +32,7 @@ import tomlkit
 import yaml
 
 from . import config as C
+from .tracing import CURRENT_RECORDER
 
 # --------------------------------------------------------------------------------------
 # Parameter catalogue: what simple agents are allowed to change
@@ -210,6 +211,23 @@ class WflowServer:
         if not line.startswith("@@WFLOW_READY@@"):
             raise RuntimeError(f"Wflow server failed to start: {line}. See {self.log_path}")
         self.version = line.split()[-1]
+        self._warm_up()
+
+    def _warm_up(self) -> None:
+        """Julia compiles Wflow.run on its first call (~1 min). Do that now with a 2-day run, so the
+        compile time is counted as start-up and not charged to whichever agent happens to run first."""
+        if not C.BASE_TOML.exists():
+            return
+        sink = LOG_SINK.get()
+        if sink:
+            sink("wflow", "warm-up: compiling Wflow with a 2-day run ...")
+        work = C.OUTPUT_DIR / "_warmup"
+        work.mkdir(parents=True, exist_ok=True)
+        write_scenario_toml(C.BASE_TOML, work / "wflow_sbm.toml", {}, C.BASE_MODEL_DIR,
+                            C.DEFAULT_START, "2019-01-03T00:00:00")
+        self.proc.stdin.write(str((work / "wflow_sbm.toml").resolve()) + "\n")  # type: ignore[union-attr]
+        self.proc.stdin.flush()  # type: ignore[union-attr]
+        self._read_marker(timeout=900)
 
     def _read_marker(self, timeout: float) -> str:
         assert self.proc and self.proc.stdout
@@ -230,10 +248,14 @@ class WflowServer:
             raise TimeoutError(f"Wflow did not respond within {timeout} s")
         return result[0]
 
-    def run(self, toml_path: Path, timeout: float = 900) -> None:
+    def run(self, toml_path: Path, timeout: float = 900) -> float:
+        """Run one TOML; returns the seconds spent starting Julia (0 when the server was already warm)."""
+        startup = 0.0
         with self.lock:
             if self.proc is None or self.proc.poll() is not None:
+                t0 = time.time()
                 self._start()
+                startup = time.time() - t0
             assert self.proc and self.proc.stdin
             self._current = ModelLog("wflow")
             try:
@@ -244,6 +266,7 @@ class WflowServer:
                 self._current = None
             if not line.startswith("@@WFLOW_DONE@@"):
                 raise RuntimeError(line.replace("@@WFLOW_ERROR@@", "Wflow error:").strip())
+        return startup
 
     def stop(self) -> None:
         if self.proc and self.proc.poll() is None:
@@ -271,15 +294,22 @@ def run_wflow_toml(toml_path: Path, mode: str | None = None, timeout: float = 90
     """Run Wflow for a TOML. ``mode``: "server" (default, persistent Julia) or "subprocess"."""
     mode = mode or os.getenv("WFLOW_MODE", "server")
     t0 = time.time()
-    if mode == "server":
-        get_server().run(Path(toml_path), timeout=timeout)
-    else:
-        log = Path(toml_path).with_name("julia_stdout.log")
-        rc = _stream([find_julia(), "-t", "4", "-e", "using Wflow; Wflow.run()", str(toml_path)], log,
-                     ModelLog("wflow"), timeout=timeout)
-        if rc != 0:
-            tail = log.read_text(encoding="utf-8", errors="replace")[-1500:]
-            raise RuntimeError(f"Wflow failed (exit {rc}):\n{tail}")
+    startup = 0.0
+    try:
+        if mode == "server":
+            startup = get_server().run(Path(toml_path), timeout=timeout)
+        else:
+            log = Path(toml_path).with_name("julia_stdout.log")
+            rc = _stream([find_julia(), "-t", "4", "-e", "using Wflow; Wflow.run()", str(toml_path)], log,
+                         ModelLog("wflow"), timeout=timeout)
+            if rc != 0:
+                tail = log.read_text(encoding="utf-8", errors="replace")[-1500:]
+                raise RuntimeError(f"Wflow failed (exit {rc}):\n{tail}")
+    finally:
+        rec = CURRENT_RECORDER.get()
+        if rec is not None:
+            rec.add_model_time(time.time() - t0 - startup)
+            rec.add_startup(startup)  # one-off Julia start: reported, but not charged to the architecture
     return time.time() - t0
 
 
@@ -308,7 +338,11 @@ def _hydromt(args: list[str], log: Path) -> None:
     fwd = ModelLog("hydromt")
     if fwd.sink:
         fwd.sink("hydromt", f"hydromt {' '.join(args[:2])} ...")
+    t0 = time.time()
     rc = _stream([exe, *args], log, fwd, cwd=C.REPO_ROOT)
+    rec = CURRENT_RECORDER.get()
+    if rec is not None:
+        rec.add_model_time(time.time() - t0, runs=0)
     if rc != 0:
         raise RuntimeError(f"hydromt {' '.join(args[:2])} failed; see {log}")
 

@@ -57,6 +57,7 @@ os.environ.setdefault("HARNESS_AUTH", "auto")   # "login" to use the Claude Code
 from IPython.display import Image, Markdown, display
 
 from hydroagent import config as C
+from hydroagent import scoreboard
 from hydroagent import twin
 from hydroagent import wflow_tools as W
 from hydroagent.architectures import registry as R
@@ -77,10 +78,18 @@ W.LOG_SINK.set(lambda source, line: print(f"  [{source}] {line}"))
 
 
 def report(out):
+    """Show the answer, plots and the cost/time metrics. Every run is also logged to the scoreboard."""
     display(Markdown(out.answer or f"**{out.status}** {out.error}"))
-    print("usage:", out.usage, "| runs:", out.run_ids)
     for p in out.plots:
         display(Image(p))
+    u = out.usage
+    cost = u.get("cost_usd")
+    print(f"LLM calls {u['llm_calls']} | tool calls {u['tool_calls']} | Wflow runs {u['wflow_runs']} | "
+          f"tokens {u['total_tokens']:,} (in {u['input_tokens']:,}, out {u['output_tokens']:,}, "
+          f"cached {u['cache_read_tokens']:,})")
+    print(f"time {u['wall_time_s']} s = LLM {u['llm_s']} + Wflow {u['model_s']} + other {u['other_s']} | "
+          f"cost {'$%.4f' % cost if isinstance(cost, (int, float)) else 'n/a'} | runs: {out.run_ids}")
+    print(f"scoreboard entry: {out.entry_id}  ->  rate it: scoreboard.rate('{out.entry_id}', 1..5)")
 
 # %% [markdown]
 # Build the model (once, about 2 min), start Wflow, and run the baseline. The first Julia start takes about
@@ -267,16 +276,27 @@ out = run_interactive(make_custom_session(my_graph, provider=PROVIDER, on_event=
 report(out)
 
 # %% [markdown]
-# ## Debrief
-# Fill in the table from your runs, using `out.usage`:
-#
-# | Architecture | LLM calls | tokens | time | right answer? | guarantees |
-# |---|---|---|---|---|---|
-# | A0 | | | | | |
-# | A1 | | | | | |
-# | A2 | | | | | |
-# | A3 | | | | | |
-# | A4 | | | | | |
+# ## Debrief: which architecture strikes the right balance?
+# Every run above was logged to the **scoreboard** (`output/scoreboard.jsonl`) with its tokens, time split
+# (LLM vs Wflow vs other) and estimated cost (`pricing.yml`). Only *you* can judge the quality: rate each
+# answer from 1 to 5 with `scoreboard.rate(entry_id, score)`, using the entry ids printed by `report()`.
+# Then compare. A fair comparison uses the same question for every architecture, ideally repeated 2-3 times,
+# because agents are not deterministic.
+
+# %%
+# scoreboard.rate("<entry id>", 4)          # rate your answers first
+sb = scoreboard.load()
+display(sb[["id", "arch", "status", "quality", "total_tokens", "wall_time_s", "llm_s", "model_s", "cost_usd",
+            "question"]].tail(20))
+summary = scoreboard.summary(sb)
+summary["tokens_per_quality_pt"] = (summary["total_tokens"] / summary["quality"]).round(0)
+summary
+
+# %%
+# Where does the time go? LLM vs hydrological model, per architecture
+summary.set_index("arch")[["llm_s", "model_s"]].plot.barh(stacked=True, figsize=(7, 3), xlabel="seconds");
+
+# %% [markdown]
 #
 # Questions to discuss:
 # - Which questions did **A0** handle as well as the agents?

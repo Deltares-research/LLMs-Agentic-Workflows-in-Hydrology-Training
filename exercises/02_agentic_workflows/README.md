@@ -149,16 +149,47 @@ They are copied into each harness workspace as `.claude/skills/`.
 | skill | know-how and procedures loaded on demand (how Wflow TOML scaling works, how to make an FDC) |
 | subagent | a separate context window for a sub-task (Modeller vs Analyst in A3) |
 
+## Measuring the balance: tokens, time, cost and quality
+
+Every run, from any level, is logged to `output/scoreboard.jsonl`. Nothing extra is needed. A run records:
+
+| What | Detail |
+|---|---|
+| **Calls** | LLM calls, tool calls, Wflow runs |
+| **Tokens** | input, output, cache read and cache write; also broken down per graph node in *Tokens per step* |
+| **Time** | split into **LLM**, **Wflow/HydroMT** and **other** (tools, plotting, orchestration) |
+| **Cost** | an estimate from [`pricing.yml`](pricing.yml) |
+| **Quality** | your own 1–5 rating. Only a hydrologist can judge whether the answer is right |
+
+What the time figures leave out:
+- Human think-time at HITL prompts.
+- Julia's one-off start-up and compilation (~1 min). It is reported separately, so the first architecture you run is not penalised.
+
+**Cost** is only shown when the model has a price in `pricing.yml`. Claude prices are filled in. Azure prices are left blank, so add your contract prices. The harness also reports the SDK's own cost figure.
+
+**How to rate:**
+- Streamlit: the stars under each answer, or edit the table on page **5 · Scoreboard**.
+- Notebook: `scoreboard.rate(entry_id, 1..5)`.
+- CLI: `cli.py rate <entry> <1-5>`.
+
+**How to compare:**
+- Streamlit page 5 shows means per architecture, a *quality vs tokens* chart, a time split, and the *token spread*. The token spread tells you how predictable an architecture is.
+- CLI: `cli.py scoreboard -q "<question>" [--runs]`.
+
+Run each architecture 2–3 times on the **same** question: agents are not deterministic.
+
 ## Debrief table
 
-| Architecture | LLM calls | Tokens | Time | Correct? | Guarantees (validation / approval / audit) |
-|---|---|---|---|---|---|
-| A0 | | | | | |
-| A1 | | | | | |
-| A2 | | | | | |
-| A3 | | | | | |
-| A4 | | | | | |
-| A5 | | | | | |
+Fill in from the scoreboard (page 5, or `cli.py scoreboard`):
+
+| Architecture | LLM calls | Tokens | Time (LLM / Wflow) | Cost | Quality (1–5) | Token spread | Guarantees (validation / approval / audit) |
+|---|---|---|---|---|---|---|---|
+| A0 | | | | | | | |
+| A1 | | | | | | | |
+| A2 | | | | | | | |
+| A3 | | | | | | | |
+| A4 | | | | | | | |
+| A5 | | | | | | | |
 
 ## Files
 
@@ -170,9 +201,10 @@ They are copied into each harness workspace as `.claude/skills/`.
 | `hydroagent/harness/claude_runner.py` | Claude Agent SDK harness: workspace, skills, MCP tools, guard hook |
 | `hydroagent/builder/` | Node catalogue, graph-spec validation and compiler, templates |
 | `hydroagent/twin.py` | Twin experiment ("observed" discharge from hidden multipliers) |
-| `hydroagent/tracing.py`, `runtime.py` | Uniform trace (calls, tokens, time), interrupt/resume driver |
+| `hydroagent/tracing.py`, `runtime.py` | Uniform trace and metrics (calls, tokens, LLM/Wflow time split, cost), interrupt/resume driver |
+| `hydroagent/scoreboard.py`, `pricing.yml` | Run log with quality ratings; price table for cost estimates |
 | `skills/` | Exercise skills and `_template` |
-| `app/streamlit_app.py` | Level 1 |
+| `app/streamlit_app.py` | Level 1 (pages: Architectures, Compare, Build your own, Skills lab, Scoreboard) |
 | `02_agentic_workflows.ipynb` / `.py` | Level 2 |
 | `cli.py` | Level 3 |
 | `tests/` | Fast tests, no LLM: `uv run pytest exercises/02_agentic_workflows/tests -q` |

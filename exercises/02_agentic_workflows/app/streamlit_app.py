@@ -25,6 +25,7 @@ from streamlit_flow.elements import StreamlitFlowEdge, StreamlitFlowNode  # noqa
 from streamlit_flow.state import StreamlitFlowState  # noqa: E402
 
 from hydroagent import config as C  # noqa: E402
+from hydroagent import scoreboard  # noqa: E402
 from hydroagent import wflow_tools as W  # noqa: E402
 from hydroagent.architectures import registry as R  # noqa: E402
 from hydroagent.builder.compile import make_custom_session, validate  # noqa: E402
@@ -169,13 +170,48 @@ def _esc(s: str) -> str:
     return s.replace("<", "&lt;").replace(">", "&gt;").replace("\n", " ")
 
 
+def fmt_cost(u: dict) -> str:
+    c = u.get("cost_usd")
+    return f"${c:.4f}" if isinstance(c, (int, float)) else "n/a"
+
+
+def show_metrics(u: dict, key: str):
+    """Cost / time / token panel for one run (same numbers that go to the scoreboard)."""
+    c = st.columns(6)
+    c[0].metric("LLM calls", u.get("llm_calls", "-"))
+    c[1].metric("tool calls", u.get("tool_calls", "-"))
+    c[2].metric("Wflow runs", u.get("wflow_runs", "-"))
+    c[3].metric("tokens (total)", f"{u.get('total_tokens', 0):,}",
+                help=f"input {u.get('input_tokens', 0):,} | output {u.get('output_tokens', 0):,} | "
+                     f"cache read {u.get('cache_read_tokens', 0):,} | cache write {u.get('cache_write_tokens', 0):,}")
+    c[4].metric("time [s]", u.get("wall_time_s", "-"),
+                help="Wall time excluding human think-time and the one-off Julia start-up "
+                     f"({u.get('julia_startup_s', 0)} s).")
+    c[5].metric("cost (est.)", fmt_cost(u), help=u.get("cost_source", ""))
+    wall = u.get("wall_time_s") or 0
+    if wall:
+        parts = {"LLM": u.get("llm_s", 0), "Wflow / HydroMT": u.get("model_s", 0), "other": u.get("other_s", 0)}
+        st.caption("Where did the time go?  " + "  |  ".join(
+            f"**{k}** {v:.1f} s ({100 * v / max(wall, 1e-9):.0f}%)" for k, v in parts.items()))
+    if u.get("by_node"):
+        with st.expander("Tokens and LLM time per step (node)"):
+            st.dataframe([{"node": n, **v} for n, v in u["by_node"].items()], width="stretch", hide_index=True)
+
+
+def rate_widget(entry_id: str, key: str):
+    """Let the participant judge answer quality (stored on the scoreboard)."""
+    if not entry_id:
+        return
+    st.markdown("**How good is this answer?** (1 = wrong/useless, 5 = correct, complete, well explained)")
+    stars = st.feedback("stars", key=f"rate_{key}_{entry_id}")
+    if stars is not None and st.session_state.get(f"rated_{entry_id}") != stars:
+        scoreboard.rate(entry_id, stars + 1)
+        st.session_state[f"rated_{entry_id}"] = stars
+        st.toast(f"Saved rating {stars + 1}/5 to the scoreboard")
+
+
 def show_outcome(out, key: str):
-    u = out.usage or {}
-    cols = st.columns(6)
-    for c, (lab, k) in zip(cols, [("LLM calls", "llm_calls"), ("tool calls", "tool_calls"),
-                                  ("input tokens", "input_tokens"), ("output tokens", "output_tokens"),
-                                  ("wall time [s]", "wall_time_s"), ("cost [$]", "cost_usd")]):
-        c.metric(lab, u.get(k, "-"))
+    show_metrics(out.usage or {}, key)
     if out.status == "error":
         st.error(out.error)
     if out.answer:
@@ -195,6 +231,7 @@ def show_outcome(out, key: str):
             pass
     if out.run_ids:
         st.caption("Runs: " + ", ".join(f"`{r}`" for r in out.run_ids) + f" (in `{C.RUNS_DIR}`)")
+    rate_widget(getattr(out, "entry_id", ""), key)
 
 
 # ----------------------------------------------------------------------------------------------- page 1
@@ -321,13 +358,21 @@ def page_compare(cfg):
         st.session_state["compare"] = results
     res = st.session_state.get("compare") or {}
     if res:
-        st.dataframe([{"architecture": R.INFOS[k].name, "status": o.status, **o.usage, "runs": len(o.run_ids)}
-                      for k, o in res.items()], width="stretch")
+        cols_keep = ["llm_calls", "tool_calls", "wflow_runs", "total_tokens", "wall_time_s", "llm_s", "model_s",
+                     "other_s", "cost_usd"]
+        st.dataframe([{"architecture": R.INFOS[k].name, "status": o.status,
+                       **{c: o.usage.get(c) for c in cols_keep}} for k, o in res.items()],
+                     width="stretch", hide_index=True)
+        st.markdown("**Where did the time go?** (seconds)")
+        st.bar_chart({k.upper(): {"LLM": o.usage.get("llm_s", 0), "Wflow/HydroMT": o.usage.get("model_s", 0),
+                                  "other": o.usage.get("other_s", 0)} for k, o in res.items()},
+                     horizontal=True, height=220)
         cols = st.columns(len(res))
         for c, (k, o) in zip(cols, res.items()):
             with c:
                 st.markdown(f"**{R.INFOS[k].name}**")
                 st.markdown(o.answer or o.error)
+                rate_widget(o.entry_id, f"cmp_{k}")
         all_runs = [r for o in res.values() for r in o.run_ids]
         if all_runs:
             st.image(str(W.plot_runs(["baseline", *all_runs], title="All runs from this comparison")))
@@ -518,7 +563,14 @@ def page_skills(cfg):
         r = run_live(lambda on_ev: (setattr(rec, "on_event", on_ev), run_harness(task, skills=use, recorder=rec))[1], box)
         box.update(state="complete" if r.status == "done" else "error", label=f"harness: {r.status}")
         st.markdown(f"**Skills loaded:** {', '.join(r.skills_loaded) or 'none'}  |  workspace `{r.workspace}`")
-        st.json(r.usage)
+        from hydroagent.runtime import Outcome
+
+        out = Outcome("done" if r.status == "done" else "error", answer=r.answer, run_ids=r.run_ids,
+                      usage=r.usage, error=r.error)
+        label = "a4 skills:" + (",".join(sorted(use)) or "none")
+        out.entry_id = scoreboard.record("a4-skills-lab", task, out, label=label)
+        show_metrics(r.usage, "skills")
+        rate_widget(out.entry_id, "skills")
         if r.error:
             st.error(r.error)
         st.markdown(r.answer)
@@ -526,10 +578,68 @@ def page_skills(cfg):
             st.image(p)
 
 
+# ----------------------------------------------------------------------------------------------- page 5
+def page_scoreboard(cfg):
+    st.title("5 · Scoreboard: which architecture strikes the right balance?")
+    st.markdown("Every run is logged automatically with its **tokens, time and estimated cost**. You add the "
+                "**quality** (stars under each answer, or edit the table below). Compare architectures on the "
+                "*same question*, ideally with 2-3 repeats each: agents are not deterministic.")
+    df = scoreboard.load()
+    if df.empty:
+        st.info("No runs yet. Run some architectures on pages 1-3 first.")
+        return
+    questions = ["(all questions)"] + sorted(df["question"].dropna().unique().tolist())
+    q = st.selectbox("Question", questions, index=0)
+    sub = df if q == questions[0] else df[df["question"] == q]
+    summ = scoreboard.summary(sub)
+    summ["tokens_per_quality_pt"] = (summ["total_tokens"] / summ["quality"]).round(0)
+    summ["cost_per_quality_pt"] = (summ["cost_usd"] / summ["quality"]).round(5)
+    st.subheader("Per architecture (means)")
+    st.dataframe(summ, width="stretch", hide_index=True,
+                 column_config={"quality": st.column_config.NumberColumn("quality (1-5)", format="%.1f"),
+                                "cost_usd": st.column_config.NumberColumn("cost $", format="$%.4f"),
+                                "tokens_std": st.column_config.NumberColumn("token spread (std)",
+                                                                            help="Higher = less predictable")})
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Quality vs tokens**: top-left is the sweet spot")
+        rated = sub.dropna(subset=["quality"])
+        if rated.empty:
+            st.caption("Rate some answers to see this chart.")
+        else:
+            st.scatter_chart(rated, x="total_tokens", y="quality", color="arch", size="wall_time_s", height=320)
+    with c2:
+        st.markdown("**Where does the time go?** (mean seconds)")
+        st.bar_chart(summ.set_index("arch")[["llm_s", "model_s"]].rename(
+            columns={"llm_s": "LLM", "model_s": "Wflow/HydroMT"}), horizontal=True, height=320)
+
+    st.subheader("All runs (edit the quality column to rate)")
+    cols = ["id", "time", "arch", "model", "status", "quality", "total_tokens", "llm_calls", "wflow_runs",
+            "wall_time_s", "cost_usd", "question", "answer"]
+    view = sub[[c for c in cols if c in sub.columns]].sort_values("time", ascending=False).reset_index(drop=True)
+    view["quality"] = view["quality"].astype("float")
+    edited = st.data_editor(view, width="stretch", hide_index=True, key="sb_editor",
+                            disabled=[c for c in view.columns if c != "quality"],
+                            column_config={"quality": st.column_config.NumberColumn(min_value=1, max_value=5, step=1)})
+    changed = edited[edited["quality"].fillna(-1) != view["quality"].fillna(-1)]
+    if not changed.empty and st.button(f"Save {len(changed)} rating(s)"):
+        for _, r in changed.iterrows():
+            if r["quality"] == r["quality"]:  # not NaN
+                scoreboard.rate(r["id"], int(r["quality"]))
+        st.rerun()
+    st.download_button("Download scoreboard (CSV)", sub.drop(columns=["by_node"], errors="ignore").to_csv(index=False),
+                       "scoreboard.csv")
+    st.markdown("""**Questions for the debrief**
+- Which architecture gives the best quality *per token* (or per dollar)? Is the most expensive one the best?
+- How much of the time is the LLM vs. the hydrological model? Would a faster/cheaper LLM change the ranking?
+- Which architectures are *predictable* (small token spread, always the same steps)? Does that matter operationally?
+- For which questions is the simple design (A0/A1) good enough, and where do you need A3/A4?""")
+
+
 # ----------------------------------------------------------------------------------------------- main
 cfg = sidebar()
 pages = {"1 · Architectures": page_architectures, "2 · Compare": page_compare, "3 · Build your own": page_builder,
-         "4 · Skills lab": page_skills}
+         "4 · Skills lab": page_skills, "5 · Scoreboard": page_scoreboard}
 choice = st.sidebar.radio("Page", list(pages), index=0, key="page")
 st.sidebar.caption(f"Runs: `{C.RUNS_DIR}`")
 pages[choice](cfg)

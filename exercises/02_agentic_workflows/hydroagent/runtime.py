@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -18,7 +19,7 @@ from langgraph.types import Command
 
 from .tools import ARTIFACTS
 from .wflow_tools import LOG_SINK
-from .tracing import Recorder
+from .tracing import CURRENT_RECORDER, Recorder
 
 
 @dataclass
@@ -31,11 +32,15 @@ class Outcome:
     usage: dict = field(default_factory=dict)
     state: dict = field(default_factory=dict)
     error: str = ""
+    entry_id: str = ""               # scoreboard entry (use scoreboard.rate(entry_id, 1..5))
 
 
 class GraphSession:
-    def __init__(self, name: str, graph, recorder: Recorder, recursion_limit: int = 60):
+    def __init__(self, name: str, graph, recorder: Recorder, recursion_limit: int = 60, log: bool = True):
         self.name = name
+        self.log = log          # write finished runs to the scoreboard
+        self.query = ""
+        self._paused_at: float | None = None
         self.graph = graph
         self.rec = recorder
         self.thread_id = f"{name}-{uuid.uuid4().hex[:8]}"
@@ -50,6 +55,7 @@ class GraphSession:
     def _invoke(self, payload) -> Outcome:
         token = ARTIFACTS.set(self.artifacts)
         log_token = LOG_SINK.set(self.rec.model_sink())  # stream HydroMT/Wflow console output into the trace
+        rec_token = CURRENT_RECORDER.set(self.rec)       # lets the Wflow runner add its time to the metrics
         try:
             for chunk in self.graph.stream(payload, self.config, stream_mode="updates"):
                 for node, upd in (chunk or {}).items():
@@ -59,27 +65,44 @@ class GraphSession:
                     self.rec.emit("node", f"node: {node}", note or "")
         except Exception as e:  # surface errors to the user instead of a stack trace in the UI
             self.rec.emit("error", type(e).__name__, str(e))
-            return Outcome("error", error=f"{type(e).__name__}: {e}", usage=self.rec.summary(),
-                           run_ids=list(self.artifacts.get("run_ids", [])), plots=list(self.artifacts.get("plots", [])))
+            self.rec.finish()
+            return self._log(Outcome("error", error=f"{type(e).__name__}: {e}", usage=self.rec.summary(),
+                                     run_ids=list(self.artifacts.get("run_ids", [])),
+                                     plots=list(self.artifacts.get("plots", []))))
         finally:
             ARTIFACTS.reset(token)
             LOG_SINK.reset(log_token)
+            CURRENT_RECORDER.reset(rec_token)
         snap = self.graph.get_state(self.config)
         values = dict(snap.values or {})
         interrupts = [i for t in (snap.tasks or []) for i in (getattr(t, "interrupts", None) or [])]
         run_ids = _merge(values.get("run_ids"), self.artifacts.get("run_ids"))
         plots = _merge(values.get("plots"), self.artifacts.get("plots"))
-        base = dict(run_ids=run_ids, plots=plots, usage=self.rec.summary(), state=values)
         if interrupts:
             q = interrupts[0].value
             self.rec.emit("human", "waiting for human", q)
-            return Outcome("interrupted", question=q, **base)
+            self._paused_at = time.time()  # human think-time is not charged to the architecture
+            return Outcome("interrupted", question=q, run_ids=run_ids, plots=plots, usage=self.rec.summary(),
+                           state=values)
+        self.rec.finish()
         answer = values.get("answer") or _last_ai_text(values.get("messages", []))
         self.rec.emit("final", "final answer", answer)
-        return Outcome("done", answer=answer, **base)
+        return self._log(Outcome("done", answer=answer, run_ids=run_ids, plots=plots, usage=self.rec.summary(),
+                                 state=values))
+
+    def _log(self, out: Outcome) -> Outcome:
+        if self.log:
+            from . import scoreboard
+
+            try:
+                out.entry_id = scoreboard.record(self.name, self.query, out)
+            except Exception as e:  # never fail a run because of bookkeeping
+                self.rec.emit("error", "scoreboard", str(e))
+        return out
 
     def start(self, query: str, extra_state: dict | None = None) -> Outcome:
         self.rec.emit("info", f"{self.name} started", query)
+        self.query = query
         from langchain_core.messages import HumanMessage
 
         payload = {"messages": [HumanMessage(query)], **(extra_state or {})}
@@ -89,6 +112,9 @@ class GraphSession:
 
     def resume(self, answer: Any) -> Outcome:
         self.rec.emit("human", "human answered", answer)
+        if self._paused_at:
+            self.rec.t0 += time.time() - self._paused_at  # exclude human wait from wall time
+            self._paused_at = None
         return self._invoke(Command(resume=answer))
 
 

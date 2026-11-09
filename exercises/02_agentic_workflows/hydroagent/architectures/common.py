@@ -49,7 +49,9 @@ class ArchInfo:
 
 def make_session(name: str, build: Callable[..., Any], provider: str | None = None,
                  on_event: Callable[[Event], None] | None = None, recursion_limit: int = 60, **opts) -> GraphSession:
-    rec = Recorder(on_event)
+    from ..llm import describe_model
+
+    rec = Recorder(on_event, model=describe_model(provider))
     llm = None if opts.pop("no_llm", False) else get_chat_model(provider)
     graph = build(llm=llm, checkpointer=MemorySaver(), rec=rec, provider=provider, **opts)
     return GraphSession(name, graph, rec, recursion_limit=recursion_limit)

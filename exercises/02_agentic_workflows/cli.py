@@ -64,10 +64,27 @@ def _ask(q):
     return typer.prompt(">")
 
 
+def _metrics(u: dict) -> None:
+    cost = u.get("cost_usd")
+    typer.secho("\n=== COST / TIME ===", bold=True, fg="cyan")
+    typer.echo(f"LLM calls {u.get('llm_calls')} | tool calls {u.get('tool_calls')} | Wflow runs {u.get('wflow_runs')}")
+    typer.echo(f"tokens: input {u.get('input_tokens', 0):,}  output {u.get('output_tokens', 0):,}  "
+               f"cache read {u.get('cache_read_tokens', 0):,}  cache write {u.get('cache_write_tokens', 0):,}  "
+               f"-> total {u.get('total_tokens', 0):,}")
+    typer.echo(f"time:   {u.get('wall_time_s')} s = LLM {u.get('llm_s')} + Wflow/HydroMT {u.get('model_s')} + other "
+               f"{u.get('other_s')}   (Julia start-up {u.get('julia_startup_s', 0)} s not counted)")
+    typer.echo(f"cost:   {'$%.4f' % cost if isinstance(cost, (int, float)) else 'n/a'}  ({u.get('cost_source')})")
+    for node, v in (u.get("by_node") or {}).items():
+        typer.echo(f"   {node:22s} {v['llm_calls']:3d} calls {v['input_tokens'] + v['output_tokens']:8,d} tok "
+                   f"{v['llm_s']:6.1f} s")
+
+
 def _report(out):
     typer.secho("\n=== ANSWER ===", bold=True)
     typer.echo(out.answer or out.error)
-    typer.secho(f"\nusage: {out.usage}", fg="cyan")
+    _metrics(out.usage)
+    if getattr(out, "entry_id", ""):
+        typer.secho(f"scoreboard entry {out.entry_id}: rate it with  cli.py rate {out.entry_id} <1-5>", fg="green")
     if out.run_ids:
         typer.echo(f"runs: {out.run_ids}")
     for p in out.plots:
@@ -143,12 +160,16 @@ def compare(archs: list[str] = typer.Argument(..., help="architecture keys follo
         _report(out)
         rows.append((k, out))
     typer.secho("\n===== SUMMARY =====", bold=True)
-    typer.echo(f"{'arch':5s} {'status':8s} {'llm':>4s} {'tools':>5s} {'tok_in':>8s} {'tok_out':>8s} {'time_s':>7s} runs")
+    typer.echo(f"{'arch':5s} {'status':8s} {'llm':>4s} {'tools':>5s} {'tokens':>9s} {'time_s':>7s} {'llm_s':>6s} "
+               f"{'wflow_s':>7s} {'cost':>8s} entry")
     for k, o in rows:
         u = o.usage
+        cost = u.get("cost_usd")
         typer.echo(f"{k:5s} {o.status:8s} {u.get('llm_calls', 0):4d} {u.get('tool_calls', 0):5d} "
-                   f"{u.get('input_tokens', 0):8d} {u.get('output_tokens', 0):8d} {u.get('wall_time_s', 0):7.1f} "
-                   f"{len(o.run_ids)}")
+                   f"{u.get('total_tokens', 0):9,d} {u.get('wall_time_s', 0):7.1f} {u.get('llm_s', 0):6.1f} "
+                   f"{u.get('model_s', 0):7.1f} {('$%.4f' % cost) if isinstance(cost, (int, float)) else 'n/a':>8s} "
+                   f"{o.entry_id}")
+    typer.echo("Rate the answers: cli.py rate <entry> <1-5>; overview: cli.py scoreboard")
     runs = [r for _, o in rows for r in o.run_ids]
     if runs:
         typer.echo(f"plot: {W.plot_runs(['baseline', *runs], title='compare')}")
@@ -188,10 +209,46 @@ def harness(task: str, skills: list[str] = typer.Option(None, "--skill", "-s", h
     """Run the Claude Agent SDK harness (A4) on a task, with skills."""
     from hydroagent.harness.claude_runner import run_harness
 
+    from hydroagent import scoreboard
+    from hydroagent.runtime import Outcome
+
     r = run_harness(task, skills=skills or None, max_turns=max_turns, on_event=_printer(verbose))
     typer.secho("\n=== ANSWER ===", bold=True)
     typer.echo(r.answer or r.error)
-    typer.echo(f"\nskills loaded: {r.skills_loaded}\nworkspace: {r.workspace}\nruns: {r.run_ids}\nusage: {r.usage}")
+    typer.echo(f"\nskills loaded: {r.skills_loaded}\nworkspace: {r.workspace}\nruns: {r.run_ids}")
+    _metrics(r.usage)
+    out = Outcome("done" if r.status == "done" else "error", answer=r.answer, run_ids=r.run_ids, usage=r.usage)
+    eid = scoreboard.record("a4-cli", task, out, label="skills:" + ",".join(skills or ["all"]))
+    typer.secho(f"scoreboard entry {eid}: rate it with  cli.py rate {eid} <1-5>", fg="green")
+
+
+@app.command()
+def rate(entry: str, quality: int, note: str = ""):
+    """Rate an answer on the scoreboard: 1 (wrong/useless) .. 5 (correct, complete, well explained)."""
+    from hydroagent import scoreboard
+
+    scoreboard.rate(entry, quality, note)
+    typer.echo(f"rated {entry}: {quality}/5")
+
+
+@app.command("scoreboard")
+def scoreboard_(question: str = typer.Option(None, "--question", "-q", help="only runs of this exact question"),
+                runs_: bool = typer.Option(False, "--runs", help="also list individual runs")):
+    """Compare architectures on quality (your ratings), tokens, time and cost."""
+    import pandas as pd
+
+    from hydroagent import scoreboard
+
+    df = scoreboard.load()
+    if df.empty:
+        typer.echo("Scoreboard is empty: run some architectures first.")
+        raise typer.Exit()
+    pd.set_option("display.width", 200)
+    pd.set_option("display.max_columns", 30)
+    typer.echo(scoreboard.summary(df, question).to_string(index=False))
+    if runs_:
+        cols = ["id", "time", "arch", "status", "quality", "total_tokens", "wall_time_s", "cost_usd", "question"]
+        typer.echo("\n" + df[cols].sort_values("time").to_string(index=False, max_colwidth=50))
 
 
 @app.command()

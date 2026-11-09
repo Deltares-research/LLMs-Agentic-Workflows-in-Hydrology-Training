@@ -41,14 +41,20 @@ class HarnessSession:
         self.max_turns = max_turns
         self.model = model
         self.result = None
+        self.log = True  # write finished runs to the scoreboard
 
     def start(self, query: str, **_) -> Outcome:
         self.rec.emit("info", f"{self.name} started", query)
         r = run_harness(query, skills=self.skills, max_turns=self.max_turns, model=self.model, recorder=self.rec)
         self.result = r
-        return Outcome("done" if r.status == "done" else "error", answer=r.answer, run_ids=r.run_ids,
-                       plots=r.plots, usage=r.usage, error=r.error,
-                       state={"workspace": r.workspace, "skills_loaded": r.skills_loaded})
+        out = Outcome("done" if r.status == "done" else "error", answer=r.answer, run_ids=r.run_ids,
+                      plots=r.plots, usage=r.usage, error=r.error,
+                      state={"workspace": r.workspace, "skills_loaded": r.skills_loaded})
+        if self.log:
+            from .. import scoreboard
+
+            out.entry_id = scoreboard.record(self.name, query, out)
+        return out
 
     def resume(self, answer) -> Outcome:  # the harness does not pause for humans in this exercise
         raise RuntimeError("A4 does not use interrupts")

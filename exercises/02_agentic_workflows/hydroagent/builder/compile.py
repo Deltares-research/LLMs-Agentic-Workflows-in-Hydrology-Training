@@ -225,5 +225,5 @@ def load_spec(path: str | Path) -> dict:
 
 
 def make_custom_session(spec: dict, provider: str | None = None, on_event=None) -> GraphSession:
-    return make_session(spec.get("name", "custom"), lambda **kw: compile_spec(spec, **kw), provider=provider,
+    return make_session(f"custom:{spec.get('name', 'graph')}", lambda **kw: compile_spec(spec, **kw), provider=provider,
                         on_event=on_event)

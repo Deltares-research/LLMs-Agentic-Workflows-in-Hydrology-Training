@@ -28,7 +28,7 @@ from typing import Callable
 from .. import config as C
 from .. import wflow_tools as W
 from ..runtime import run_sync
-from ..tracing import Event, Recorder
+from ..tracing import CURRENT_RECORDER, Event, Recorder
 
 DEFAULT_ALLOWED = ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "TodoWrite",
                    "mcp__hydro__run_wflow_scenario", "mcp__hydro__list_parameters", "mcp__hydro__get_run_summary"]
@@ -189,7 +189,13 @@ async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns:
                                   SystemMessage, TextBlock, ToolResultBlock, ToolUseBlock, UserMessage)
 
     W.LOG_SINK.set(rec.model_sink())  # Wflow console output from MCP tool calls -> trace
+    CURRENT_RECORDER.set(rec)         # Wflow time from MCP tool calls -> metrics
     s = C.get_settings()
+    model_label = f"anthropic:{model or s.anthropic_model}"
+    if not rec.model:
+        rec.model = model_label
+    seen: set = set()
+    api_calls = 0
     run_ids: list[str] = []
     skills_loaded: list[str] = []
     env = {}
@@ -218,10 +224,9 @@ async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns:
                 rec.emit("harness", "session start", f"model={msg.data.get('model')} "
                                                      f"skills={msg.data.get('skills')} tools={len(msg.data.get('tools', []))}")
             elif isinstance(msg, AssistantMessage):
-                rec.llm_calls += 1
-                u = msg.usage or {}
-                rec.add_usage(u.get("input_tokens", 0) + u.get("cache_read_input_tokens", 0)
-                              + u.get("cache_creation_input_tokens", 0), u.get("output_tokens", 0))
+                if msg.message_id not in seen:  # one API call can arrive as several messages
+                    seen.add(msg.message_id)
+                    api_calls += 1
                 for b in msg.content:
                     if isinstance(b, TextBlock) and b.text.strip():
                         rec.emit("llm", "Claude", b.text)
@@ -236,11 +241,19 @@ async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns:
                         c = b.content if isinstance(b.content, str) else json.dumps(b.content, default=str)
                         rec.emit("error" if b.is_error else "tool_result", "result", c)
             elif isinstance(msg, ResultMessage):
-                rec.cost_usd += msg.total_cost_usd or 0.0
+                # session totals reported by the SDK: tokens (incl. cache), API time, and its own cost figure
+                u = msg.usage or {}
+                rec.add_llm("claude_harness", u.get("input_tokens", 0), u.get("output_tokens", 0),
+                            u.get("cache_read_input_tokens", 0), u.get("cache_creation_input_tokens", 0),
+                            (msg.duration_api_ms or 0) / 1000, calls=api_calls, model=model_label)
+                rec.reported_cost_usd += msg.total_cost_usd or 0.0
+                rec.emit("harness", "usage", f"{msg.num_turns} turns, {api_calls} API calls, "
+                                             f"SDK-reported cost ${msg.total_cost_usd or 0:.4f}")
                 answer = msg.result or ""
                 if msg.is_error:
                     status, err = "error", answer or msg.subtype
     plots = sorted(str(p) for p in ws.rglob("*.png"))
+    rec.finish()
     rec.emit("final" if status == "done" else "error", "final answer", answer or err)
     return HarnessResult(status, answer, str(ws), run_ids, plots, skills_loaded, rec.summary(), err)
 
