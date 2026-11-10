@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from .. import wflow_tools as W
 from ..runtime import _last_ai_text
 from ..tools import ARTIFACTS, get_tools
+from ..llm import structured
 from .common import DOMAIN_CONTEXT, ArchInfo, HydroState
 
 INFO = ArchInfo(
@@ -71,7 +72,7 @@ then physical interpretation, then one caveat."""
 
 
 def build(llm, checkpointer=None, require_approval: bool = True, max_retries: int = 2, **_):
-    classifier = llm.with_structured_output(Classification)
+    classifier = structured(llm, Classification)
     modeller = create_agent(llm, get_tools("parameters", "simulation"), system_prompt=MODELLER_PROMPT,
                             name="modeller")
     analyst = create_agent(llm, get_tools("analysis"), system_prompt=ANALYST_PROMPT, name="analyst")

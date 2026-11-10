@@ -42,6 +42,7 @@ value = 3.75653                             # constant parameter
 | Change a constant | edit `value` in `[input.static.<std_name>]` |
 | Spatially varying change of a map | write a new staticmaps NetCDF (see the `netcdf-analysis` skill) and pass it as `staticmaps_path` |
 | Turn a constant into a spatial map | add a new variable (e.g. `snow_ddf_map`) to your staticmaps copy, then call `run_wflow_scenario` with `staticmaps_path` and `static_overrides={"snowpack__degree_day_coefficient": "snow_ddf_map"}` |
+| More/less rain, a synthetic storm, warmer climate | edit a copy of `inmaps-eobs-2019-2020.nc` (see the `netcdf-analysis` skill) and pass it as `forcing_path` |
 
 The key is `netcdf_variable_name` (flat). A nested `netcdf.variable.name` table fails with
 `Couldn't parse the section under [input]`.

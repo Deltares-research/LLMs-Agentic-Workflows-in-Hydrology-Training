@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from langgraph.types import Command
 
+from .llm import text_of
 from .tools import ARTIFACTS
 from .wflow_tools import LOG_SINK
 from .tracing import CURRENT_RECORDER, Recorder
@@ -119,12 +120,22 @@ class GraphSession:
 
 
 def run_interactive(session: GraphSession, query: str, ask: Callable[[Any], Any] = None, **kw) -> Outcome:
-    """Drive a session to completion, asking the human via ``ask`` (default: ``input()``)."""
-    ask = ask or (lambda q: input(f"\n[agent asks] {q}\n> "))
+    """Drive a session to completion, asking the human via ``ask`` (default: ``input()``).
+
+    In a notebook, prefer ``session.start(...)`` / ``session.resume(answer)`` in separate cells: VS Code shows
+    ``input()`` as a small box at the top of the window, not in the cell.
+    """
+    ask = ask or _ask_stdin
     out = session.start(query, **kw)
     while out.status == "interrupted":
         out = session.resume(ask(out.question))
     return out
+
+
+def _ask_stdin(question: Any) -> str:
+    print(f"\n🙋 [agent asks] {question}\n"
+          "   Type your answer in the input box (in VS Code: at the TOP of the window) and press Enter.", flush=True)
+    return input("> ")
 
 
 def _merge(*lists) -> list:
@@ -139,8 +150,7 @@ def _merge(*lists) -> list:
 def _last_ai_text(messages) -> str:
     for m in reversed(messages or []):
         if getattr(m, "type", "") == "ai":
-            c = m.content
-            text = c if isinstance(c, str) else " ".join(x.get("text", "") for x in c if isinstance(x, dict))
+            text = text_of(m)
             if text.strip():
                 return text
     return ""

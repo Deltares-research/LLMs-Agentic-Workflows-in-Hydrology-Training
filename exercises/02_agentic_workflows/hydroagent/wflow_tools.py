@@ -426,7 +426,8 @@ def _posix(p: Path | str) -> str:
 
 def write_scenario_toml(base_toml: Path, out_toml: Path, multipliers: dict[str, float], model_dir: Path,
                         start: str, end: str, static_override: Path | None = None,
-                        static_map_overrides: dict[str, str] | None = None) -> None:
+                        static_map_overrides: dict[str, str] | None = None,
+                        forcing_override: Path | None = None) -> None:
     doc = tomlkit.parse(base_toml.read_text(encoding="utf-8"))
     doc["dir_input"] = _posix(model_dir)
     doc["dir_output"] = _posix(out_toml.parent / "output")
@@ -435,6 +436,8 @@ def write_scenario_toml(base_toml: Path, out_toml: Path, multipliers: dict[str, 
     doc["model"]["cold_start__flag"] = True
     if static_override:
         doc["input"]["path_static"] = _posix(static_override)
+    if forcing_override:  # edited forcing (e.g. scaled precip); same grid, variables and time axis as the base
+        doc["input"]["path_forcing"] = _posix(forcing_override)
     static = doc["input"]["static"]
     for std_name, var in (static_map_overrides or {}).items():
         # read this parameter from a NetCDF variable (e.g. a constant turned into a spatial map)
@@ -480,7 +483,8 @@ def list_runs() -> list[RunInfo]:
 def create_run(multipliers: dict[str, float] | None = None, label: str = "", start: str = C.DEFAULT_START,
                end: str = C.DEFAULT_END, model_dir: Path | str = C.BASE_MODEL_DIR,
                static_override: Path | str | None = None, run_id: str | None = None,
-               static_map_overrides: dict[str, str] | None = None) -> RunInfo:
+               static_map_overrides: dict[str, str] | None = None,
+               forcing_override: Path | str | None = None) -> RunInfo:
     mult = validate_multipliers(multipliers or {})
     model_dir = Path(model_dir)
     if not base_model_ready(model_dir):
@@ -491,10 +495,13 @@ def create_run(multipliers: dict[str, float] | None = None, label: str = "", sta
     info = RunInfo(run_id=run_id, label=label or slug, multipliers=mult, model_dir=_posix(model_dir), start=start,
                    end=end, created=datetime.now().isoformat(timespec="seconds"),
                    static_override=_posix(static_override) if static_override else None,
-                   extra={"static_map_overrides": static_map_overrides} if static_map_overrides else {})
+                   extra={k: v for k, v in {"static_map_overrides": static_map_overrides,
+                                            "forcing_override": _posix(forcing_override) if forcing_override
+                                            else None}.items() if v})
     info.path.mkdir(parents=True, exist_ok=True)
     write_scenario_toml(model_dir / "wflow_sbm.toml", info.path / "wflow_sbm.toml", mult, model_dir, start, end,
-                        Path(static_override) if static_override else None, static_map_overrides)
+                        Path(static_override) if static_override else None, static_map_overrides,
+                        Path(forcing_override) if forcing_override else None)
     _save_info(info)
     return info
 

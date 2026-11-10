@@ -78,6 +78,43 @@ def load_env() -> Path | None:
     return _ENV_LOADED
 
 
+def foundry_base_url() -> str | None:
+    """Claude on Microsoft (Azure) Foundry: the base URL from ``FOUNDRY_ENDPOINT``, or None if not configured.
+
+    ``FOUNDRY_ENDPOINT`` may be the full messages URL copied from the Foundry portal
+    (``https://<resource>.services.ai.azure.com/anthropic/v1/messages``) or the base
+    (``.../anthropic``); both give ``https://<resource>.services.ai.azure.com/anthropic``.
+    """
+    load_env()
+    ep = (os.getenv("FOUNDRY_ENDPOINT") or "").strip().rstrip("/")
+    if not ep or not os.getenv("FOUNDRY_KEY"):
+        return None
+    for suffix in ("/v1/messages", "/v1"):
+        if ep.endswith(suffix):
+            ep = ep[: -len(suffix)]
+    return ep
+
+
+def use_foundry() -> bool:
+    return foundry_base_url() is not None
+
+
+def foundry_openai_url() -> str | None:
+    """OpenAI-compatible endpoint of the Foundry resource, used for non-Claude deployments (e.g. Mistral).
+
+    ``MISTRAL_ENDPOINT`` overrides it (e.g. ``https://<other-resource>.services.ai.azure.com/openai/v1``);
+    otherwise it is derived from ``FOUNDRY_ENDPOINT``: ``https://<resource>.services.ai.azure.com/openai/v1``.
+    """
+    load_env()
+    if os.getenv("MISTRAL_ENDPOINT"):
+        return os.environ["MISTRAL_ENDPOINT"].strip().rstrip("/")
+    base = foundry_base_url()
+    if not base:
+        return None
+    host = base.split("/anthropic")[0]
+    return f"{host}/openai/v1"
+
+
 @dataclass
 class Settings:
     """Model/provider settings. Override with env vars or by passing arguments."""
@@ -85,6 +122,7 @@ class Settings:
     provider: str = field(default_factory=lambda: os.getenv("AGENT_PROVIDER", "anthropic"))
     anthropic_model: str = field(
         default_factory=lambda: os.getenv("AGENT_ANTHROPIC_MODEL")
+        or (os.getenv("DEPLOYMENT_OPUS_55") if use_foundry() else None)  # Foundry deployment name
         or os.getenv("ANTHROPIC_DEPLOYMENT_SONNET55")
         or "claude-sonnet-5-5"
     )
@@ -93,8 +131,13 @@ class Settings:
         or os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41")
         or "gpt-4.1"
     )
+    # Mistral on Azure Foundry (provider "mistral"): deployment name on the Foundry resource
+    mistral_deployment: str = field(
+        default_factory=lambda: os.getenv("DEPLOYMENT_MISTRAL_MEDIUM_35") or "mistral-medium-3-5"
+    )
     temperature: float = 0.0
-    # Claude Agent SDK auth: "auto" (API key if set), "api_key", or "login" (Claude Code login/subscription).
+    # Claude Agent SDK auth: "auto" (Foundry if FOUNDRY_* set, else API key if set, else login),
+    # "foundry", "api_key", or "login" (Claude Code login/subscription).
     harness_auth: str = field(default_factory=lambda: os.getenv("HARNESS_AUTH", "auto"))
 
 

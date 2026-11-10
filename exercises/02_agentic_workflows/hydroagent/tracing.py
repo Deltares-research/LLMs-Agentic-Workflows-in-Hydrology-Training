@@ -22,6 +22,8 @@ from typing import Any, Callable
 import yaml
 from langchain_core.callbacks import BaseCallbackHandler
 
+from .llm import text_of
+
 # The recorder of the session that is currently running (set by GraphSession / the harness) so that
 # deep code such as the Wflow runner can add its time without being passed the recorder explicitly.
 CURRENT_RECORDER: ContextVar["Recorder | None"] = ContextVar("CURRENT_RECORDER", default=None)
@@ -186,8 +188,7 @@ class TraceCallback(BaseCallbackHandler):
         # LangChain's input_tokens includes cached tokens; store them separately for pricing
         uncached = max((um.get("input_tokens", 0) or 0) - cache_read - cache_write, 0)
         self.rec.add_llm(node, uncached, um.get("output_tokens", 0), cache_read, cache_write, time.time() - t0)
-        text = msg.content if isinstance(msg.content, str) else " ".join(
-            c.get("text", "") for c in msg.content if isinstance(c, dict))
+        text = text_of(msg)
         calls = [f"{tc['name']}({_short(tc.get('args', {}), 200)})" for tc in getattr(msg, "tool_calls", []) or []]
         detail = (text or "").strip()
         if calls:

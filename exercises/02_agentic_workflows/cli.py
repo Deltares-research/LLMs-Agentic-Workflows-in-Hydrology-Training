@@ -129,13 +129,13 @@ def list_():
 def run(arch: str, query: str = typer.Argument(None), provider: str = typer.Option(None, "--provider", "-p"),
         opt: list[str] = typer.Option(None, "--opt", "-o", help="architecture option key=value (repeatable)"),
         verbose: bool = typer.Option(False, "--verbose", "-v")):
-    """Run one architecture (a0..a5). Without QUERY its example question is used."""
+    """Run one architecture (a0..a5, a4m). Without QUERY its example question is used."""
     from hydroagent.architectures.registry import INFOS, create_session
     from hydroagent.runtime import run_interactive
 
     sess = create_session(arch, provider=provider, on_event=_printer(verbose), **_opts(opt))
     q = query or INFOS[arch].example_query
-    out = run_interactive(sess, q, ask=_ask) if arch != "a4" else sess.start(q)
+    out = run_interactive(sess, q, ask=_ask) if arch not in ("a4", "a4m") else sess.start(q)
     _report(out)
 
 
@@ -220,6 +220,59 @@ def harness(task: str, skills: list[str] = typer.Option(None, "--skill", "-s", h
     out = Outcome("done" if r.status == "done" else "error", answer=r.answer, run_ids=r.run_ids, usage=r.usage)
     eid = scoreboard.record("a4-cli", task, out, label="skills:" + ",".join(skills or ["all"]))
     typer.secho(f"scoreboard entry {eid}: rate it with  cli.py rate {eid} <1-5>", fg="green")
+
+
+@app.command("check-model")
+def check_model(provider: str = typer.Option(None, "--provider", "-p", help="anthropic | azure | mistral")):
+    """Check that a model supports what the architectures need: plain reply, tool calls, structured outputs."""
+    import time
+    from typing import Literal
+
+    from langchain_core.tools import tool
+    from pydantic import create_model
+
+    from hydroagent.architectures.a0_plain_llm import ScenarioSpec
+    from hydroagent.architectures.a2_critic_loop import Proposal, Verdict
+    from hydroagent.architectures.a3_director import Classification
+    from hydroagent.architectures.a5_composed import Route
+    from hydroagent.llm import describe_model, get_chat_model, structured, text_of
+
+    q = "What happens to peak flows at Epinal if soils become 30% less permeable (ksat_vertical)?"
+    llm = get_chat_model(provider)
+    typer.echo(f"model: {describe_model(provider)}")
+    failures = 0
+
+    def check(name, fn):
+        nonlocal failures
+        t0 = time.time()
+        try:
+            res = fn()
+            typer.secho(f"  OK    {name:<28} {time.time() - t0:5.1f}s  {str(res)[:90]}", fg="green")
+        except Exception as e:  # noqa: BLE001
+            failures += 1
+            typer.secho(f"  FAIL  {name:<28} {type(e).__name__}: {str(e)[:160]}", fg="red")
+
+    @tool
+    def run_scenario(parameter: str, multiplier: float) -> str:
+        """Run a Wflow scenario that multiplies one parameter."""
+        return "ok"
+
+    def tool_call():
+        msg = llm.bind_tools([run_scenario]).invoke(q + " Use the run_scenario tool.")
+        if not msg.tool_calls:
+            raise RuntimeError(f"no tool call; replied: {text_of(msg)[:80]}")
+        return msg.tool_calls[0]["name"] + str(msg.tool_calls[0]["args"])
+
+    check("plain reply", lambda: text_of(llm.invoke("Reply with the single word OK.")))
+    check("tool call (agents)", tool_call)
+    choice = create_model("Choice", branch=(Literal["explain: answer from knowledge", "agent: run model scenarios"],
+                                             ...), reason=(str, ...))
+    for name, schema in [("A0 planner", ScenarioSpec), ("A2 proposal", Proposal), ("A2 critic", Verdict),
+                         ("A3 classifier", Classification), ("A5 router", Route), ("builder router", choice)]:
+        check(f"structured: {name}", lambda s=schema: structured(llm, s).invoke(q))
+    typer.secho("all checks passed" if not failures else f"{failures} check(s) failed",
+                fg="green" if not failures else "red")
+    raise typer.Exit(1 if failures else 0)
 
 
 @app.command()

@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from .. import wflow_tools as W
+from ..llm import structured, text_of
 from .common import DOMAIN_CONTEXT, ArchInfo, HydroState
 
 INFO = ArchInfo(
@@ -40,7 +41,7 @@ class ScenarioSpec(BaseModel):
 def build(llm, checkpointer=None, **_):
     catalogue = "\n".join(f"- {p['key']} (allowed x{p['allowed_multiplier'][0]}-x{p['allowed_multiplier'][1]}): "
                           f"{p['description']}" for p in W.list_parameters())
-    planner = llm.with_structured_output(ScenarioSpec)
+    planner = structured(llm, ScenarioSpec)
 
     def interpret(state: HydroState):
         spec: ScenarioSpec = planner.invoke(
@@ -61,7 +62,7 @@ def build(llm, checkpointer=None, **_):
         msg = llm.invoke(f"{DOMAIN_CONTEXT}\n\nQuestion: {state['query']}\n\nScenario: {state['data']['spec']}\n"
                          f"Model result (vs baseline): {state['data']['summary']}\n\n"
                          "Write a short answer for a hydrologist (numbers first, then one-line explanation).")
-        return {"answer": msg.content if isinstance(msg.content, str) else str(msg.content)}
+        return {"answer": text_of(msg)}
 
     g = StateGraph(HydroState)
     g.add_node("interpret", interpret)

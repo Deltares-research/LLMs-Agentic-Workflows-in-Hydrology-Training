@@ -100,7 +100,10 @@ Baseline run output: {(C.RUNS_DIR / 'baseline' / 'output').as_posix()}  (output.
 All scenario runs live in {C.RUNS_DIR.as_posix()}/<run_id>/output/.
 
 Model: wflow_sbm, upper Moselle to Epinal (GRDC 9116044), 2019-2020 daily, first 3 months = spin-up.
-Run Wflow ONLY through the MCP tool run_wflow_scenario (uniform multipliers and/or an edited staticmaps file).
+Run Wflow ONLY through the MCP tool run_wflow_scenario. Scenarios can combine uniform parameter multipliers,
+an edited copy of staticmaps.nc (parameters, land use, spatial patterns) and an edited copy of the forcing
+inmaps-eobs-2019-2020.nc (precip mm/day, pet mm/day, temp degC; e.g. extra rain, a synthetic storm, warming).
+Write edited copies into your workspace; never modify the base model folder.
 Use your skills when relevant. Write analysis scripts to files (Write tool) and run them with the interpreter
 above using the Bash tool (not PowerShell).
 Finish with a concise answer: numbers with units, run_ids used, and paths of figures you made."""
@@ -120,24 +123,33 @@ def _make_mcp_server(ws: Path, rec: Recorder, run_ids: list[str]):
           "Run a Wflow scenario (~15-80 s). Args: label (str), multipliers (object, may be {}), staticmaps_path "
           "(str, optional absolute path to an edited staticmaps.nc INSIDE the workspace), static_overrides (object, "
           "optional {wflow_standard_name: netcdf_variable_name} so a parameter is read from a (new) map in that "
-          "file, e.g. to turn a constant into a spatial map). Returns run_id + stats and % change vs baseline.",
+          "file, e.g. to turn a constant into a spatial map), forcing_path (str, optional path to an edited copy of "
+          "inmaps-eobs-2019-2020.nc INSIDE the workspace, same grid/time axis/variables precip, pet, temp; use it "
+          "to change rainfall, temperature or evaporation). Returns run_id + stats and % change vs baseline.",
           {"type": "object", "properties": {
               "label": {"type": "string"},
               "multipliers": {"type": "object", "additionalProperties": {"type": "number"}},
               "staticmaps_path": {"type": "string"},
-              "static_overrides": {"type": "object", "additionalProperties": {"type": "string"}}},
+              "static_overrides": {"type": "object", "additionalProperties": {"type": "string"}},
+              "forcing_path": {"type": "string"}},
            "required": ["label"]})
     async def run_wflow_scenario(args):
         try:
-            sp = args.get("staticmaps_path") or None
-            if sp:
-                p = Path(sp) if Path(sp).is_absolute() else ws / sp
-                if ws.resolve() not in p.resolve().parents:
-                    return _txt("ERROR: staticmaps_path must be inside the workspace " + ws.as_posix())
-                sp = p
+            paths = {}
+            for key in ("staticmaps_path", "forcing_path"):
+                v = args.get(key) or None
+                if v:
+                    p = Path(v) if Path(v).is_absolute() else ws / v
+                    if ws.resolve() not in p.resolve().parents:
+                        return _txt(f"ERROR: {key} must be inside the workspace " + ws.as_posix())
+                    if not p.is_file():
+                        return _txt(f"ERROR: {key} not found: {p.as_posix()}")
+                    v = p
+                paths[key] = v
             W.ensure_baseline()
-            info = W.create_run(args.get("multipliers") or {}, args["label"], static_override=sp,
-                                static_map_overrides=args.get("static_overrides") or None)
+            info = W.create_run(args.get("multipliers") or {}, args["label"], static_override=paths["staticmaps_path"],
+                                static_map_overrides=args.get("static_overrides") or None,
+                                forcing_override=paths["forcing_path"])
             info = W.execute_run(info.run_id)
             run_ids.append(info.run_id)
             return _txt(W.summarise_run(info.run_id))
@@ -183,6 +195,36 @@ def _guard_hook(ws: Path, rec: Recorder):
     return hook
 
 
+def _harness_env(auth: str, model: str) -> dict[str, str]:
+    """Environment for the Claude Code process behind the Agent SDK, per auth mode.
+
+    foundry: Claude on Azure Foundry (FOUNDRY_ENDPOINT + FOUNDRY_KEY). Claude Code also calls a "small/fast"
+             model for background work; all model aliases are pinned to our deployment so it never asks
+             Foundry for a deployment that does not exist.
+    api_key: ANTHROPIC_API_KEY against the Anthropic API.
+    login:   the Claude Code login on this machine.
+    auto:    foundry if configured, else api_key if set, else login.
+    """
+    if auth == "auto":
+        auth = "foundry" if C.use_foundry() else "api_key" if os.getenv("ANTHROPIC_API_KEY") else "login"
+    if auth == "foundry":
+        base = C.foundry_base_url()
+        if not base:
+            raise RuntimeError("HARNESS_AUTH=foundry but FOUNDRY_ENDPOINT / FOUNDRY_KEY are not set in .env")
+        return {
+            "CLAUDE_CODE_USE_FOUNDRY": "1",
+            "ANTHROPIC_FOUNDRY_BASE_URL": base,
+            "ANTHROPIC_FOUNDRY_API_KEY": os.environ["FOUNDRY_KEY"],
+            "ANTHROPIC_API_KEY": "",  # never mix in a first-party key
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
+        }
+    if auth == "login":
+        return {"ANTHROPIC_API_KEY": ""}  # fall back to the Claude Code login on this machine
+    return {}
+
+
 async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns: int,
                allowed_tools: list[str], auth: str, extra_system: str = "") -> HarnessResult:
     from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher, ResultMessage,
@@ -198,9 +240,7 @@ async def _run(task: str, ws: Path, rec: Recorder, model: str | None, max_turns:
     api_calls = 0
     run_ids: list[str] = []
     skills_loaded: list[str] = []
-    env = {}
-    if auth == "login" or (auth == "auto" and not os.getenv("ANTHROPIC_API_KEY")):
-        env["ANTHROPIC_API_KEY"] = ""  # fall back to the Claude Code login on this machine
+    env = _harness_env(auth, model or s.anthropic_model)
     options = ClaudeAgentOptions(
         model=model or s.anthropic_model,
         cwd=str(ws),

@@ -8,7 +8,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.19.6
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -39,9 +39,11 @@
 
 # %% [markdown]
 # ## Step 0: Setup
-# Pick the LLM provider for the LangGraph architectures: `"anthropic"` (Claude) or `"azure"` (GPT). The harness
-# (A4) always uses Claude. If your Anthropic API key has no credit, set `HARNESS_AUTH = "login"` to use your
-# Claude Code login.
+# Pick the LLM provider for the LangGraph architectures: `"anthropic"` (Claude), `"mistral"` (Mistral on Azure
+# Foundry, deployment `DEPLOYMENT_MISTRAL_MEDIUM_35`) or `"azure"` (GPT). Run the same step with two providers
+# and compare them on the scoreboard. The harness (A4) always uses Claude. With `FOUNDRY_ENDPOINT` +
+# `FOUNDRY_KEY` in `.env`, Claude is called through Azure Foundry (deployment `DEPLOYMENT_OPUS_55`). Otherwise
+# `ANTHROPIC_API_KEY` is used, or set `HARNESS_AUTH = "login"` to use your Claude Code login for A4.
 
 # %%
 import os
@@ -51,7 +53,7 @@ from pathlib import Path
 EXERCISE_DIR = Path.cwd() if (Path.cwd() / "hydroagent").exists() else Path.cwd() / "exercises" / "02_agentic_workflows"
 sys.path.insert(0, str(EXERCISE_DIR))
 
-PROVIDER = "anthropic"          # or "azure"
+PROVIDER = "anthropic"          # or "mistral", "azure"
 os.environ.setdefault("HARNESS_AUTH", "auto")   # "login" to use the Claude Code login for A4
 
 from IPython.display import Image, Markdown, display
@@ -61,6 +63,7 @@ from hydroagent import scoreboard
 from hydroagent import twin
 from hydroagent import wflow_tools as W
 from hydroagent.architectures import registry as R
+from hydroagent.notebook_ui import run_with_buttons   # answer agent questions with buttons
 from hydroagent.runtime import run_interactive
 
 print("env file:", C.load_env())
@@ -79,6 +82,15 @@ W.LOG_SINK.set(lambda source, line: print(f"  [{source}] {line}"))
 
 def report(out):
     """Show the answer, plots and the cost/time metrics. Every run is also logged to the scoreboard."""
+    if out.status == "interrupted":
+        q = out.question
+        if isinstance(q, dict):  # e.g. plan approval: {"question": ..., "plan": [{"agent", "task"}, ...]}
+            steps = [f"{i}. **{s.get('agent', '')}**: {s.get('task', s)}" if isinstance(s, dict) else f"{i}. {s}"
+                     for i, s in enumerate(q.get("plan", []), 1)]
+            q = "\n".join([q.get("question", ""), ""] + steps)
+        display(Markdown(f"### 🙋 The agent asks you\n\n{q}\n\n"
+                         "Answer with the buttons below."))
+        return
     display(Markdown(out.answer or f"**{out.status}** {out.error}"))
     for p in out.plots:
         display(Image(p))
@@ -116,16 +128,47 @@ W.summarise_run(run.run_id)
 display(Image(str(W.plot_runs(["baseline", run.run_id]))))
 
 # %% [markdown]
+# ## How your question reaches each agent
+# Every step below has a `QUESTION = "..."` line: edit it to ask your own. All architectures start the same way:
+# `session.start(QUESTION)` (or `run_interactive(session, QUESTION)`, which does the same) puts your question
+# into the graph's starting state twice:
+#
+# - `query`: the plain question text, for steps that write their own prompt around it;
+# - `messages`: a chat history that starts with your question, for agents that converse.
+#
+# What differs is **who sees it**:
+#
+# | | Who reads your question |
+# |---|---|
+# | **A0** | `interpret` (as part of its prompt) and `report` (with the Wflow results) |
+# | **A1** | the ReAct agent, as the first chat message |
+# | **A2** | the generator, every round. The critic sees only the scores, not your question |
+# | **A3** | `classify`. Your clarifications are appended to it. The modeller subagent gets a task written by the plan, **not** your question |
+# | **A4** | Claude, as the task (on top of a system prompt with the model paths) |
+# | **A5** | the router, then the chosen branch (prompt, chat message or harness task) |
+# | **your graph** | agent nodes get the chat history. Plain-LLM and critic nodes get a transcript. A harness node gets `{query}` |
+#
+# When an agent pauses to ask *you* something, buttons appear in the cell (`run_with_buttons`). Your click calls
+# `session.resume(answer)`, which sends the answer back into the paused step. The run continues from there; it
+# does not start over.
+
+# %% [markdown]
 # ## Step 2: A0, plain LLM + fixed workflow
+#
+# ![A0 architecture](docs/figures/a0.png)
+#
 # The LLM only translates the question into multipliers and writes the report. Code fixes the order of steps.
 
 # %%
-out = run_interactive(R.create_session("a0", provider=PROVIDER, on_event=show),
-                      "What happens to peak and low flows at Epinal if soils become 30% less permeable?")
+QUESTION = "What happens to peak and low flows at Epinal if soils become 30% less permeable?"   # edit me
+out = run_interactive(R.create_session("a0", provider=PROVIDER, on_event=show), QUESTION)
 report(out)
 
 # %% [markdown]
 # ## Step 3: A1, single agent (ReAct)
+#
+# ![A1 architecture](docs/figures/a1.png)
+#
 # One LLM with tools in a loop. **Customise it:** change the system prompt or remove a tool set, and see how the
 # behaviour changes. Try a question that needs *two* scenarios, for example comparing +20% and -20% soil thickness.
 
@@ -138,19 +181,24 @@ MY_TOOLSETS = ("parameters", "simulation", "analysis")   # try removing "analysi
 
 session = make_session("a1", a1_react.build, provider=PROVIDER, on_event=show,
                        system_prompt=MY_PROMPT, toolsets=MY_TOOLSETS)
-out = run_interactive(session, "Compare +20% and -20% soil thickness: which affects low flows at Epinal more?")
+QUESTION = "Compare +20% and -20% soil thickness: which affects low flows at Epinal more?"   # edit me
+out = run_interactive(session, QUESTION)
 report(out)
 
 # %% [markdown]
 # ## Step 4: A2, generator-critic loop (calibration)
+#
+# ![A2 architecture](docs/figures/a2.png)
+#
 # There are no observed discharge series in this repo, so we use a **twin experiment**. A hidden "truth" run
 # made with secret multipliers plays the role of observations, and the loop tries to recover it.
 # **Knobs:** `max_iter`, `target_kge`, `critic="llm"` vs `"rule"`. Is the LLM critic worth its tokens?
 
 # %%
 twin.ensure_truth()
-out = run_interactive(R.create_session("a2", provider=PROVIDER, on_event=show, max_iter=4, critic="llm"),
-                      R.INFOS["a2"].example_query)
+QUESTION = ("Calibrate ksat_vertical, soil_thickness and ksat_horizontal_ratio so the Epinal discharge matches "
+            "observations (target KGE 0.95).")   # edit me
+out = run_interactive(R.create_session("a2", provider=PROVIDER, on_event=show, max_iter=4, critic="llm"), QUESTION)
 report(out)
 
 # %%
@@ -158,21 +206,29 @@ print("the truth was:", twin.reveal_truth())   # debrief: equifinality?
 
 # %% [markdown]
 # ## Step 5: A3, Director with subagents and human-in-the-loop
+#
+# ![A3 architecture](docs/figures/a3.png)
+#
 # This follows the Director pattern from the Agent4Hydro project:
 # - an allow-list of scenario types;
 # - clarification questions when inputs are missing;
 # - plan approval before any compute is spent;
 # - Modeller and Analyst subagents, with retries and escalation.
 #
-# The agent will ask you questions in an input box. Try an out-of-scope request too.
+# The agent pauses to ask you questions. Answer with the **buttons** that appear in the cell output:
+# a text box + **Send** for open questions (try `-30`), **Approve / Reject** for the plan. After each click the
+# trace and result appear under the buttons. Try an out-of-scope request too.
 
 # %%
-out = run_interactive(R.create_session("a3", provider=PROVIDER, on_event=show),
-                      "What if the soils in the Moselle become less permeable?")
-report(out)
+QUESTION = "What if the soils in the Moselle become less permeable?"   # edit me (no % on purpose: it will ask)
+a3 = R.create_session("a3", provider=PROVIDER, on_event=show)
+a3_run = run_with_buttons(a3, QUESTION, report)   # a3_run["out"] holds the latest outcome
 
 # %% [markdown]
 # ## Step 6: A4, Claude Agent SDK harness + skills (code agent)
+#
+# ![A4 architecture](docs/figures/a4.png)
+#
 # The harness writes and runs its own Python on `staticmaps.nc` / `output.nc`. It works in a sandboxed
 # workspace and runs Wflow through an MCP tool.
 #
@@ -189,11 +245,29 @@ from hydroagent.harness.claude_runner import available_skills, run_harness
 [(s["name"], s["description"][:80]) for s in available_skills()]
 
 # %%
-r = run_harness(R.INFOS["a4"].example_query, on_event=show)
-display(Markdown(r.answer or r.error))
-print("skills loaded:", r.skills_loaded, "| usage:", r.usage, "| workspace:", r.workspace)
-for p in r.plots:
-    display(Image(p))
+HARNESS_QUESTION = ("Halve the soil permeability (soil_ksat_vertical) only in the Fresse-sur-Moselle sub-catchment "
+                    "(GRDC 9116039), run the model, and compare the annual-maximum discharge at Epinal and at "
+                    "Fresse-sur-Moselle with the baseline. Make one figure.")   # edit me (also used by A4m below)
+out_a4 = R.create_session("a4", on_event=show).start(HARNESS_QUESTION)
+report(out_a4)
+print("skills loaded:", out_a4.state.get("skills_loaded"), "| workspace:", out_a4.state.get("workspace"))
+
+# %% [markdown]
+# ### A4m: the same task with Mistral Vibe
+#
+# ![A4m architecture](docs/figures/a4m.png)
+#
+# Mistral's own coding agent, **Mistral Vibe**, with your Mistral deployment on Azure Foundry. It gets the same
+# workspace layout, the same skills and the same Wflow tools as A4, so this is a like-for-like comparison of two
+# harnesses and two models. Install Vibe once: `uv tool install mistral-vibe`.
+#
+# Compare the two outputs (and the scoreboard below): did both load a skill? Same numbers? Tokens, time, cost?
+# Rate both answers with `scoreboard.rate(...)`.
+
+# %%
+out_a4m = R.create_session("a4m", on_event=show).start(HARNESS_QUESTION)
+report(out_a4m)
+print("skills loaded:", out_a4m.state.get("skills_loaded"), "| workspace:", out_a4m.state.get("workspace"))
 
 # %% [markdown]
 # ### Write your own skill
@@ -227,14 +301,20 @@ print("skills loaded:", r.skills_loaded, "| usage:", r.usage)
 
 # %% [markdown]
 # ## Step 7: A5, composed router
+#
+# ![A5 architecture](docs/figures/a5.png)
+#
 # Try a knowledge question, a uniform parameter scenario, and an open-ended code task. Which route does each take?
 # What does each cost?
 
 # %%
-for q in ["What does the KsatHorFrac parameter do in wflow_sbm?",
-          "Increase river roughness by 50%: how does the Epinal peak change?"]:
-    out = run_interactive(R.create_session("a5", provider=PROVIDER, on_event=show), q)
-    report(out)
+QUESTIONS = [   # edit me: each question gets its own session; watch which route the router picks
+    "What does the KsatHorFrac parameter do in wflow_sbm?",                  # expect: simple_answer
+    "Increase river roughness by 50%: how does the Epinal peak change?",     # expect: parameter_scenario
+    # "Halve soil_ksat_vertical only in sub-catchment 9116039 and compare annual maxima",  # open_ended_code (slow)
+]
+for q in QUESTIONS:
+    run_with_buttons(R.create_session("a5", provider=PROVIDER, on_event=show), q, report)  # buttons if unsure
 
 # %% [markdown]
 # ## Step 8: Build your own graph (JSON)
@@ -271,9 +351,8 @@ my_graph = {
     ],
 }
 print(validate(my_graph) or "valid")
-out = run_interactive(make_custom_session(my_graph, provider=PROVIDER, on_event=show),
-                      "How do low flows at Epinal respond to a 50% higher crop factor?")
-report(out)
+QUESTION = "How do low flows at Epinal respond to a 50% higher crop factor?"   # edit me
+run_with_buttons(make_custom_session(my_graph, provider=PROVIDER, on_event=show), QUESTION, report)
 
 # %% [markdown]
 # ## Debrief: which architecture strikes the right balance?

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from .. import twin
 from .. import wflow_tools as W
+from ..llm import structured, text_of
 from .common import DOMAIN_CONTEXT, ArchInfo, HydroState
 
 INFO = ArchInfo(
@@ -50,8 +51,8 @@ def build(llm, checkpointer=None, max_iter: int = 5, target_kge: float = 0.95, c
           params: tuple[str, ...] = tuple(twin.CALIBRATION_PARAMS), **_):
     catalogue = "\n".join(f"- {p['key']} (x{p['allowed_multiplier'][0]}-x{p['allowed_multiplier'][1]}): "
                           f"{p['description']}" for p in W.list_parameters() if p["key"] in params)
-    generator = llm.with_structured_output(Proposal)
-    critic_llm = llm.with_structured_output(Verdict)
+    generator = structured(llm, Proposal)
+    critic_llm = structured(llm, Verdict)
 
     def _hist(state) -> str:
         rows = state.get("data", {}).get("history", [])
@@ -110,7 +111,7 @@ def build(llm, checkpointer=None, max_iter: int = 5, target_kge: float = 0.95, c
         msg = llm.invoke(f"{DOMAIN_CONTEXT}\n\nSummarise this calibration for a hydrologist in <=8 lines: "
                          f"best parameter set, KGE progression, and caveats (equifinality).\n"
                          f"History:\n{_hist(state)}")
-        text = msg.content if isinstance(msg.content, str) else str(msg.content)
+        text = text_of(msg)
         return {"answer": text, "plots": plots, "data": {**d, "best": best}}
 
     g = StateGraph(HydroState)

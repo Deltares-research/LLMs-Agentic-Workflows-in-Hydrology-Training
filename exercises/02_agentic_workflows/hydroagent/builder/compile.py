@@ -14,10 +14,12 @@ from pydantic import BaseModel, Field, create_model
 
 from .. import twin
 from .. import wflow_tools as W
+from ..llm import structured, text_of
 from ..architectures.common import DOMAIN_CONTEXT, HydroState, make_session
 from ..harness.claude_runner import run_harness
 from ..runtime import GraphSession, _last_ai_text
 from ..tools import ARTIFACTS, get_tools
+from .edit import auto_label
 from .nodes import NODE_TYPES, TOOL_ACTIONS
 
 
@@ -26,7 +28,8 @@ class GraphSpecError(ValueError):
 
 
 def validate(spec: dict) -> list[str]:
-    """Return a list of problems (empty = valid)."""
+    """Return a list of problems (empty = valid). Missing branch labels are filled in first (see auto_label)."""
+    spec, _notes = auto_label(spec)
     errs: list[str] = []
     nodes = {n["id"]: n for n in spec.get("nodes", [])}
     edges = spec.get("edges", [])
@@ -53,15 +56,22 @@ def validate(spec: dict) -> list[str]:
                 errs.append(f"End node {i} must not have outgoing edges.")
         elif t == "critic":
             if sorted(labels) != ["approved", "revise"]:
-                errs.append(f"Critic {i} needs exactly two outgoing edges labelled 'approved' and 'revise'.")
+                errs.append(f"Critic {i} needs two connections: 'approved' (go on) and 'revise' (back to the agent). "
+                        f"It has {len(outs)}. Tip: add the critic with 'Insert on connection' and both are made for you.")
         elif t == "router":
             if len(outs) < 2 or any(not lb for lb in labels) or len(set(labels)) != len(labels):
-                errs.append(f"Router {i} needs >= 2 outgoing edges with unique, non-empty labels.")
+                errs.append(f"Router {i} needs at least 2 branches (has {len(outs)}). Connect it to each option; "
+                            "the branch descriptions are filled in for you and can be edited by clicking an edge.")
         elif t == "human" and len(outs) == 2:
             if sorted(labels) != ["approved", "rejected"]:
                 errs.append(f"Human node {i} with two edges needs labels 'approved' and 'rejected'.")
-        elif len(outs) != 1:
-            errs.append(f"Node {i} ({NODE_TYPES[t].label if t in NODE_TYPES else t}) needs exactly one outgoing edge (has {len(outs)}).")
+        elif len(outs) > 1:
+            errs.append(f"{i} ({NODE_TYPES[t].label if t in NODE_TYPES else t}) goes to {len(outs)} next steps "
+                        f"({', '.join(e['target'] for e in outs)}). A normal step has one next step: keep one "
+                        "connection, or put a Router or Critic after it to choose between paths.")
+        elif not outs:
+            errs.append(f"{i} ({NODE_TYPES[t].label if t in NODE_TYPES else t}) has no next step. "
+                        "Connect it to another node or to End.")
     if len(starts) == 1:  # reachability
         seen, stack = set(), [starts[0]]
         while stack:
@@ -82,8 +92,7 @@ def _transcript(state, n: int = 12) -> str:
     lines = []
     for m in state.get("messages", [])[-n:]:
         who = getattr(m, "name", None) or m.type
-        c = m.content if isinstance(m.content, str) else " ".join(
-            x.get("text", "") for x in m.content if isinstance(x, dict))
+        c = text_of(m)
         if c.strip():
             lines.append(f"[{who}] {c.strip()[:3000]}")
     return "\n".join(lines)
@@ -95,6 +104,7 @@ def _session_runs() -> list[str]:
 
 
 def compile_spec(spec: dict, llm, checkpointer=None, rec=None, **_):
+    spec, _notes = auto_label(spec)
     errs = validate(spec)
     if errs:
         raise GraphSpecError("\n".join(errs))
@@ -123,7 +133,7 @@ def compile_spec(spec: dict, llm, checkpointer=None, rec=None, **_):
             def fn(state):
                 msg = llm.invoke(f"{DOMAIN_CONTEXT}\n\nConversation so far:\n{_transcript(state)}\n\n"
                                  f"Instruction: {cfg['instruction']}")
-                return {"messages": [AIMessage(msg.content if isinstance(msg.content, str) else str(msg.content),
+                return {"messages": [AIMessage(text_of(msg),
                                                name=nid)]}
 
         elif t == "tool_step":
@@ -152,7 +162,7 @@ def compile_spec(spec: dict, llm, checkpointer=None, rec=None, **_):
                 approved: bool
                 feedback: str = Field(description="what to improve, concretely")
 
-            judge = llm.with_structured_output(Verdict)
+            judge = structured(llm, Verdict)
 
             def fn(state):
                 d = dict(state.get("data") or {})
@@ -170,7 +180,7 @@ def compile_spec(spec: dict, llm, checkpointer=None, rec=None, **_):
         elif t == "router":
             labels = [e["label"].strip() for e in out[nid]]
             Choice = create_model("Choice", branch=(Literal[tuple(labels)], ...), reason=(str, ...))
-            chooser = llm.with_structured_output(Choice)
+            chooser = structured(llm, Choice)
 
             def fn(state):
                 c = chooser.invoke(f"{DOMAIN_CONTEXT}\n\n{cfg['instruction']}\nBranches: {labels}\n\n"

@@ -106,3 +106,70 @@ def test_scoreboard_roundtrip(tmp_path, monkeypatch):
     df = df.reset_index()
     summ = scoreboard.summary(df, "q")
     assert set(summ["arch"]) == {"a0", "a1"}
+
+
+def test_builder_insert_critic_wires_loop():
+    from hydroagent.builder import edit as GE
+    from hydroagent.builder.templates import TEMPLATES
+
+    spec = GE.insert_on_edge(TEMPLATES["Single agent"], {"id": "judge", "type": "critic"}, "agent", "end")
+    assert validate(spec) == []
+    labels = {(e["source"], e["target"]): e["label"] for e in spec["edges"]}
+    assert labels[("judge", "agent")] == "revise" and labels[("judge", "end")] == "approved"
+
+
+def test_builder_auto_label_and_fixes():
+    from hydroagent.builder import edit as GE
+
+    spec = {"name": "t", "nodes": [{"id": "start", "type": "start"}, {"id": "agent", "type": "llm_agent"},
+                                   {"id": "c", "type": "critic"}, {"id": "plot", "type": "tool_step"},
+                                   {"id": "end", "type": "end"}],
+            "edges": [{"source": "start", "target": "agent"}, {"source": "agent", "target": "c"},
+                      {"source": "c", "target": "agent"}, {"source": "c", "target": "plot"},  # no labels
+                      {"source": "plot", "target": "end"}, {"source": "agent", "target": "end"}]}  # 2 outs
+    errs = validate(spec)
+    assert len(errs) == 1 and "agent" in errs[0] and "next steps" in errs[0]  # critic labels were auto-filled
+    assert GE.problems(spec) == [{"node": "agent", "kind": "too_many", "targets": ["c", "end"]}]
+    assert validate(GE.keep_only(spec, "agent", "c")) == []
+
+
+def test_vibe_stream_parser_and_config(tmp_path):
+    from hydroagent.harness import vibe_runner as V
+    from hydroagent.tracing import Recorder
+
+    events = []
+    rec = Recorder(events.append)
+    p = V._StreamParser(rec)
+    call = {"id": "e1", "type": "effect", "title": "run", "generationStatus": "completed",
+            "detail": {"kind": "tool", "toolName": "hydro_run_wflow_scenario", "input": {"label": "x"}},
+            "state": {"status": "running"}}
+    p.feed(call)
+    p.feed({**call, "state": {"status": "completed", "outputText": '{"run_id": "r1"}'}})
+    p.feed({**call, "state": {"status": "completed", "outputText": "dup"}})  # repeated update: no new event
+    p.feed({"id": "e2", "type": "effect", "detail": {"kind": "skill", "toolName": "skill",
+                                                      "input": {"name": "netcdf-analysis"}},
+            "state": {"status": "completed", "outputText": "ok"}})
+    p.feed({"id": "m1", "type": "message", "role": "assistant", "generationStatus": "completed",
+            "content": [{"type": "text", "text": "Peak +10%"}]})
+    kinds = [e.kind for e in events]
+    assert kinds.count("tool_call") == 2 and kinds.count("tool_result") == 2 and rec.tool_calls == 2
+    assert p.answer == "Peak +10%" and p.skills == ["netcdf-analysis"]
+
+    ws = V.prepare_workspace(name=f"vibe-test-{tmp_path.name}")
+    try:
+        cfg = (V.write_vibe_config(ws, "mistral-medium-3-5", "https://x/openai/v1", "FOUNDRY_KEY")
+               / "config.toml").read_text(encoding="utf-8")
+        assert 'outside_workdir = "deny"' in cfg and '"web_fetch"' in cfg and "[tools.write_file]" in cfg
+        assert C.BASE_MODEL_DIR.resolve().as_posix() in cfg and "wflow_mcp_server.py" in cfg
+    finally:
+        import shutil
+
+        shutil.rmtree(ws, ignore_errors=True)
+        shutil.rmtree(C.HARNESS_DIR / "_vibe_home" / ws.name, ignore_errors=True)
+
+
+def test_a4m_registered():
+    from hydroagent.architectures import registry as R
+
+    assert "a4m" in R.INFOS and R.graph_structure("a4m")[0] == ["__start__", "vibe_harness", "__end__"]
+    assert type(R.create_session("a4m")).__name__ == "VibeHarnessSession"

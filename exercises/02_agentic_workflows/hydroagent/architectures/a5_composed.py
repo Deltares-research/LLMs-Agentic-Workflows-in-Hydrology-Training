@@ -20,6 +20,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from ..harness.claude_runner import run_harness
+from ..llm import structured, text_of
 from ..runtime import _last_ai_text
 from . import a1_react
 from .common import DOMAIN_CONTEXT, ArchInfo, HydroState
@@ -47,7 +48,7 @@ class Route(BaseModel):
 
 
 def build(llm, checkpointer=None, rec=None, confidence_threshold: float = 0.7, harness_max_turns: int = 40, **_):
-    router = llm.with_structured_output(Route)
+    router = structured(llm, Route)
     react = a1_react.build(llm)
 
     def route(state: HydroState):
@@ -56,7 +57,7 @@ def build(llm, checkpointer=None, rec=None, confidence_threshold: float = 0.7, h
 
     def simple_answer(state: HydroState):
         msg = llm.invoke(f"{DOMAIN_CONTEXT}\n\nAnswer briefly (no model runs available here):\n{state['query']}")
-        return {"answer": msg.content if isinstance(msg.content, str) else str(msg.content)}
+        return {"answer": text_of(msg)}
 
     def parameter_scenario(state: HydroState):
         res = react.invoke({"messages": [HumanMessage(state["query"])]})
