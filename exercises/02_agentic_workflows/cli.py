@@ -125,8 +125,12 @@ def list_():
         typer.echo(f"  {s['name']:18s} {s['description'][:90]}")
 
 
+PROVIDER_HELP = "model for the LangGraph architectures: anthropic | mistral | azure (A4/A4m always use their own vendor)"
+
+
 @app.command()
-def run(arch: str, query: str = typer.Argument(None), provider: str = typer.Option(None, "--provider", "-p"),
+def run(arch: str, query: str = typer.Argument(None),
+        provider: str = typer.Option(None, "--provider", "-p", help=PROVIDER_HELP),
         opt: list[str] = typer.Option(None, "--opt", "-o", help="architecture option key=value (repeatable)"),
         verbose: bool = typer.Option(False, "--verbose", "-v")):
     """Run one architecture (a0..a5, a4m). Without QUERY its example question is used."""
@@ -141,17 +145,17 @@ def run(arch: str, query: str = typer.Argument(None), provider: str = typer.Opti
 
 @app.command()
 def compare(archs: list[str] = typer.Argument(..., help="architecture keys followed by the question"),
-            provider: str = typer.Option(None, "--provider", "-p"),
+            provider: str = typer.Option(None, "--provider", "-p", help=PROVIDER_HELP),
             auto_answer: str = typer.Option("yes", help="answer(s) for human questions, comma-separated")):
     """Run the same question on several architectures: compare cost, time and answers."""
     from hydroagent import wflow_tools as W
-    from hydroagent.architectures.registry import INFOS, create_session
+    from hydroagent.architectures.registry import INFOS, create_session, model_label
 
     *keys, query = archs
     answers = [a.strip() for a in auto_answer.split(",")]
     rows = []
     for k in keys:
-        typer.secho(f"\n##### {INFOS[k].name}", bold=True)
+        typer.secho(f"\n##### {INFOS[k].name}  [{model_label(k, provider)}]", bold=True)
         sess = create_session(k, provider=provider, on_event=_printer(False))
         out, i = sess.start(query), 0
         while out.status == "interrupted" and i < 4:
@@ -160,12 +164,12 @@ def compare(archs: list[str] = typer.Argument(..., help="architecture keys follo
         _report(out)
         rows.append((k, out))
     typer.secho("\n===== SUMMARY =====", bold=True)
-    typer.echo(f"{'arch':5s} {'status':8s} {'llm':>4s} {'tools':>5s} {'tokens':>9s} {'time_s':>7s} {'llm_s':>6s} "
+    typer.echo(f"{'arch':5s} {'model':30s} {'status':8s} {'llm':>4s} {'tools':>5s} {'tokens':>9s} {'time_s':>7s} {'llm_s':>6s} "
                f"{'wflow_s':>7s} {'cost':>8s} entry")
     for k, o in rows:
         u = o.usage
         cost = u.get("cost_usd")
-        typer.echo(f"{k:5s} {o.status:8s} {u.get('llm_calls', 0):4d} {u.get('tool_calls', 0):5d} "
+        typer.echo(f"{k:5s} {str(u.get('model', ''))[:30]:30s} {o.status:8s} {u.get('llm_calls', 0):4d} {u.get('tool_calls', 0):5d} "
                    f"{u.get('total_tokens', 0):9,d} {u.get('wall_time_s', 0):7.1f} {u.get('llm_s', 0):6.1f} "
                    f"{u.get('model_s', 0):7.1f} {('$%.4f' % cost) if isinstance(cost, (int, float)) else 'n/a':>8s} "
                    f"{o.entry_id}")

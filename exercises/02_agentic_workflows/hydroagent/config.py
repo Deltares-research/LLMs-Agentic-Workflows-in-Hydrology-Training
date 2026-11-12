@@ -131,9 +131,12 @@ class Settings:
         or os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41")
         or "gpt-4.1"
     )
-    # Mistral on Azure Foundry (provider "mistral"): deployment name on the Foundry resource
+    # Mistral on Azure Foundry (provider "mistral"): deployment name on the Foundry resource.
+    # Large 4 is the default; Medium 3.5 is the fallback when no Large 4 deployment is configured.
     mistral_deployment: str = field(
-        default_factory=lambda: os.getenv("DEPLOYMENT_MISTRAL_MEDIUM_35") or "mistral-medium-3-5"
+        default_factory=lambda: os.getenv("DEPLOYMENT_MISTRAL_LARGE_4")
+        or os.getenv("DEPLOYMENT_MISTRAL_MEDIUM_35")
+        or "mistral-large-4"
     )
     temperature: float = 0.0
     # Claude Agent SDK auth: "auto" (Foundry if FOUNDRY_* set, else API key if set, else login),

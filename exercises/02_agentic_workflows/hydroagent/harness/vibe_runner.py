@@ -139,13 +139,15 @@ def write_vibe_config(ws: Path, model: str, api_base: str, key_env: str) -> Path
         'name = "foundry"',
         f"api_base = {_toml_str(api_base)}",
         f"api_key_env_var = {_toml_str(key_env)}",
-        'api_style = "openai"',
-        'backend = "generic"',
+        # Native Mistral backend (Mistral SDK), as each vendor's harness runs in its own native mode. The generic
+        # OpenAI backend stringifies Mistral's structured reasoning chunks into the message text.
+        'backend = "mistral"',
         "",
         "[[models]]",
         f"name = {_toml_str(model)}",
         'provider = "foundry"',
         'alias = "harness-model"',
+        'thinking = "high"',  # Vibe's own default for its shipped model; reasoning parsed natively by the SDK
         f"input_price = {pin}",
         f"output_price = {pout}",
         "",
@@ -344,7 +346,10 @@ def run_vibe_harness(task: str, *, skills: list[str] | None = None, model: str |
     if (out_dir / "export.json").exists():
         export = json.loads((out_dir / "export.json").read_text(encoding="utf-8"))
     u = export.get("usage") or {}
-    rec.add_llm("vibe_harness", u.get("input_tokens", 0), u.get("output_tokens", 0), u.get("cached_input_tokens", 0),
+    # Vibe's input_tokens INCLUDES the cached ones (its total = input + output); the Recorder wants them separate
+    cached = u.get("cached_input_tokens", 0) or 0
+    uncached = max((u.get("input_tokens", 0) or 0) - cached, 0)
+    rec.add_llm("vibe_harness", uncached, u.get("output_tokens", 0), cached,
                 0, max(wall - wflow_s, 0.0), calls=export.get("steps") or 0, model=label)
     if export.get("cost_usd"):
         rec.reported_cost_usd += float(export["cost_usd"])

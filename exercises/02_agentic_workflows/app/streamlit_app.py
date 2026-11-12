@@ -28,6 +28,7 @@ from hydroagent import config as C  # noqa: E402
 from hydroagent import scoreboard  # noqa: E402
 from hydroagent import wflow_tools as W  # noqa: E402
 from hydroagent.architectures import registry as R  # noqa: E402
+from hydroagent.architectures.common import harness_for  # noqa: E402
 from hydroagent.builder import edit as GE  # noqa: E402
 from hydroagent.builder.compile import make_custom_session, validate  # noqa: E402
 from hydroagent.builder.nodes import NODE_TYPES, TOOL_ACTIONS  # noqa: E402
@@ -50,27 +51,44 @@ EVENT_ICON = {"llm": "🧠", "tool_call": "🔧", "tool_result": "📄", "node":
 
 
 # ----------------------------------------------------------------------------------------------- helpers
-def sidebar() -> dict:
-    st.sidebar.header("Settings")
-    providers = ["anthropic", "mistral", "azure"]
-    default = C.get_settings().provider
-    provider = st.sidebar.selectbox("LLM provider (LangGraph architectures)", providers,
-                                    index=providers.index(default) if default in providers else 0,
-                                    format_func={"anthropic": "Claude (anthropic)", "mistral": "Mistral (Foundry)",
-                                                 "azure": "GPT (Azure OpenAI)"}.get)
-    s = C.get_settings(provider=provider)
-    model = {"anthropic": s.anthropic_model, "mistral": s.mistral_deployment, "azure": s.azure_deployment}[provider]
-    st.sidebar.caption(f"Model: `{model}`. The A4 harness always uses Claude.")
-    auth_modes = ["auto", "foundry", "api_key", "login"]
-    auth = st.sidebar.selectbox("Claude harness auth", auth_modes,
-                                index=auth_modes.index(s.harness_auth) if s.harness_auth in auth_modes else 0,
-                                help="'auto' uses Azure Foundry if FOUNDRY_ENDPOINT/FOUNDRY_KEY are set, else the "
-                                     "API key, else the Claude Code login on this machine.")
+PROVIDERS = ["anthropic", "mistral", "azure"]
+PROVIDER_LABELS = {"anthropic": "Claude (Anthropic)", "mistral": "Mistral (Foundry)", "azure": "GPT (Azure OpenAI)"}
+AUTH_MODES = ["auto", "foundry", "api_key", "login"]
+
+
+def provider_picker(label: str, key: str, help: str | None = None) -> str:
+    """Provider for the LangGraph patterns. Shared across pages (kept in session state, not in the sidebar),
+    because the harness patterns (A4, A4m) always use their own vendor's model."""
+    ss = st.session_state
+    if ss.get("provider") not in PROVIDERS:
+        default = C.get_settings().provider
+        ss["provider"] = default if default in PROVIDERS else PROVIDERS[0]
+    p = st.selectbox(label, PROVIDERS, index=PROVIDERS.index(ss["provider"]), format_func=PROVIDER_LABELS.get,
+                     key=f"provider_{key}", help=help)
+    ss["provider"] = p
+    return p
+
+
+def harness_auth_picker(key: str) -> None:
+    """How the Claude Agent SDK harness authenticates. Only shown where the Claude harness can run."""
     import os
 
-    os.environ["HARNESS_AUTH"] = auth
-    st.sidebar.divider()
-    st.sidebar.subheader("Model status")
+    ss = st.session_state
+    cur = ss.get("harness_auth") or C.get_settings().harness_auth
+    ss["harness_auth"] = st.selectbox(
+        "Claude harness auth", AUTH_MODES, index=AUTH_MODES.index(cur) if cur in AUTH_MODES else 0,
+        key=f"auth_{key}",
+        help="'auto' uses Azure Foundry if FOUNDRY_ENDPOINT/FOUNDRY_KEY are set, else the API key, else the "
+             "Claude Code login on this machine.")
+    os.environ["HARNESS_AUTH"] = ss["harness_auth"]
+
+
+def sidebar() -> dict:
+    import os
+
+    if st.session_state.get("harness_auth"):  # chosen on a page; applies to every Claude harness run
+        os.environ["HARNESS_AUTH"] = st.session_state["harness_auth"]
+    st.sidebar.header("Model status")
     ready = W.base_model_ready()
     st.sidebar.write(("✅" if ready else "❌") + " base model built")
     base = (C.RUNS_DIR / "baseline" / "output" / "output.csv").exists()
@@ -94,7 +112,7 @@ def sidebar() -> dict:
         run_live(with_model_log(lambda: W.get_server().run(W.ensure_baseline().path / "wflow_sbm.toml")
                                 if base else W.ensure_baseline()), box)
         st.rerun()
-    return {"provider": provider}
+    return {}
 
 
 @st.cache_data(show_spinner=False)
@@ -315,15 +333,16 @@ def page_architectures(cfg):
         st.markdown(info.summary)
         st.markdown(f"**Use when:** {info.use_when}")
         st.markdown(f"**Trade-off:** {info.trade_off}")
-        if info.claude_only:
-            st.info("Claude-only: runs through the Claude Agent SDK harness regardless of the provider setting.")
+        provider = provider_picker("Model", "arch") if R.uses_provider(key) else None
+        st.markdown(f"**Runs on:** `{R.model_label(key, provider)}`")
+        if not R.uses_provider(key):
+            st.caption("Fixed: each vendor's model runs in that vendor's own harness. Compare A4 and A4m on the "
+                       "same question to compare Claude + Claude Agent SDK with Mistral + Vibe.")
         if info.hitl:
             st.info("Human-in-the-loop: the agent may pause and ask you something below.")
         if key == "a4m":
             from hydroagent.harness.vibe_runner import vibe_executable
 
-            st.info("Runs Mistral Vibe with your Mistral deployment, regardless of the provider setting. "
-                    "Same workspace, skills and Wflow tools as A4: ask both the same question and compare.")
             if not vibe_executable():
                 st.error("Mistral Vibe is not installed. Install it once with `uv tool install mistral-vibe`.")
     with right:
@@ -343,8 +362,12 @@ def page_architectures(cfg):
             names = [s["name"] for s in available_skills()]
             opts["skills"] = st.multiselect("skills available to the agent", names, default=names)
             opts["max_turns"] = st.slider("max turns", 5, 60, 40)
+            if key == "a4":
+                harness_auth_picker("a4")
         elif key == "a5":
             opts["confidence_threshold"] = st.slider("human check if router confidence below", 0.0, 1.0, 0.7)
+            if harness_for(provider) == "anthropic":
+                harness_auth_picker("a5")
         else:
             st.caption("No options. Edit the code in `hydroagent/architectures/` to change behaviour.")
 
@@ -352,7 +375,7 @@ def page_architectures(cfg):
     ss = st.session_state
     if st.button("▶ Run", type="primary", key=f"run_{key}"):
         try:
-            sess = R.create_session(key, provider=cfg["provider"], **opts)
+            sess = R.create_session(key, provider=provider, **opts)
         except Exception as e:
             st.error(f"Could not create the agent: {e}")
             return
@@ -399,8 +422,12 @@ def page_architectures(cfg):
 def page_compare(cfg):
     st.title("2 · Compare architectures on the same question")
     st.markdown("Same question, different designs. Is the extra structure worth the extra calls, tokens and time?")
+    provider = provider_picker("Model for the LangGraph patterns (A0-A3, A5)", "compare",
+                               help="A4 and A4m ignore this: each runs its own vendor's model in its own harness.")
     keys = st.multiselect("Architectures", list(R.INFOS), default=["a0", "a1", "a3"],
-                          format_func=lambda k: R.INFOS[k].name)
+                          format_func=lambda k: f"{R.INFOS[k].name}  [{R.model_label(k, provider)}]")
+    if any(k == "a4" or (k == "a5" and harness_for(provider) == "anthropic") for k in keys):
+        harness_auth_picker("compare")
     query = st.text_area("Question", "What happens to peak and low flows at Epinal if soils become 30% "
                                      "less permeable?", height=80)
     auto = st.text_input("Automatic answer to human-in-the-loop questions", "yes",
@@ -410,7 +437,7 @@ def page_compare(cfg):
         for k in keys:
             box = st.status(f"{R.INFOS[k].name}", expanded=False)
             try:
-                sess = R.create_session(k, provider=cfg["provider"])
+                sess = R.create_session(k, provider=provider)
             except Exception as e:
                 box.update(state="error", label=f"{k}: {e}")
                 continue
@@ -433,7 +460,7 @@ def page_compare(cfg):
     if res:
         cols_keep = ["llm_calls", "tool_calls", "wflow_runs", "total_tokens", "wall_time_s", "llm_s", "model_s",
                      "other_s", "cost_usd"]
-        st.dataframe([{"architecture": R.INFOS[k].name, "status": o.status,
+        st.dataframe([{"architecture": R.INFOS[k].name, "model": o.usage.get("model"), "status": o.status,
                        **{c: o.usage.get(c) for c in cols_keep}} for k, o in res.items()],
                      width="stretch", hide_index=True)
         st.markdown("**Where did the time go?** (seconds)")
@@ -664,6 +691,10 @@ def page_builder(cfg):
 
     with run_col:
         st.subheader("Run")
+        provider = provider_picker("Model for LLM and agent nodes", "builder",
+                                   help="Claude harness nodes always run Claude in the Claude Agent SDK.")
+        if any(n.data.get("ntype") == "claude_harness" for n in ss["flow"].nodes):
+            harness_auth_picker("builder")
         st.text_area("Question for your agent", "How sensitive is the Epinal peak flow to doubling soil thickness?",
                      key="custom_query")
         busy = job_running("custom_job")
@@ -674,7 +705,7 @@ def page_builder(cfg):
         # on_click callbacks run before the page script, so a rerun sent by the canvas component (Firefox does
         # this when the canvas is redrawn) cannot swallow the click.
         st.button("▶ Run my agent", type="primary", disabled=bool(errs) or busy, width="stretch",
-                  on_click=_start_custom_run, args=(cfg["provider"],))
+                  on_click=_start_custom_run, args=(provider,))
         job_feed("custom_job", "custom agent")
         job = ss.get("custom_job")
         if job and job["done"]:
@@ -718,6 +749,8 @@ def page_skills(cfg):
             st.rerun()
 
     st.subheader("Test with the harness")
+    st.markdown(f"**Runs on:** `{R.model_label('a4')}`")
+    harness_auth_picker("skills")
     names = [s["name"] for s in available_skills()]
     use = st.multiselect("Skills available in this run", names, default=names)
     task = st.text_area("Task", "Make a flow-duration curve for Epinal for the baseline run and the most recent "

@@ -54,7 +54,8 @@ From the **repo root**:
     ANTHROPIC_API_KEY=...
     ANTHROPIC_DEPLOYMENT_SONNET55=claude-sonnet-5-5   # model used for Claude
     # optional, Mistral on the same Foundry resource (provider "mistral", LangGraph architectures only):
-    DEPLOYMENT_MISTRAL_MEDIUM_35=mistral-medium-3-5   # Foundry deployment name
+    DEPLOYMENT_MISTRAL_LARGE_4=mistral-large-4        # Foundry deployment name (default)
+    # DEPLOYMENT_MISTRAL_MEDIUM_35=mistral-medium-3-5 # used only if Large 4 is not set
     # MISTRAL_ENDPOINT=https://<other-resource>.services.ai.azure.com/openai/v1   # only if on another resource
     # MISTRAL_KEY=...                                                            # key of that resource
     # optional, for the Azure switch (LangGraph architectures only):
@@ -161,7 +162,7 @@ They are copied into each harness workspace: as `.claude/skills/` for A4 (Claude
 uv tool install mistral-vibe
 ```
 
-It uses your Mistral deployment (`DEPLOYMENT_MISTRAL_MEDIUM_35`) through the Foundry resource. Its config is
+It uses your Mistral deployment (`DEPLOYMENT_MISTRAL_LARGE_4`) through the Foundry resource. Its config is
 written per run outside the workspace, so your own `~/.vibe` is not touched.
 
 **Tool vs skill vs subagent:**

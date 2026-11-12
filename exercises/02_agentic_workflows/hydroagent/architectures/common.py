@@ -47,6 +47,16 @@ class ArchInfo:
     claude_only: bool = False
 
 
+def harness_for(provider: str | None) -> str:
+    """The provider's own code-agent harness ("anthropic" = Claude Agent SDK, "mistral" = Mistral Vibe).
+
+    Each vendor's model runs in that vendor's harness. GPT (Azure) has no harness here, so it falls back to Claude.
+    """
+    from .. import config as C
+
+    return "mistral" if (provider or C.get_settings().provider) == "mistral" else "anthropic"
+
+
 def make_session(name: str, build: Callable[..., Any], provider: str | None = None,
                  on_event: Callable[[Event], None] | None = None, recursion_limit: int = 60, **opts) -> GraphSession:
     from ..llm import describe_model

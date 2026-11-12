@@ -50,9 +50,10 @@ def get_chat_model(provider: str | None = None, model: str | None = None, temper
         key = os.getenv("MISTRAL_KEY") or os.getenv("FOUNDRY_KEY")
         if not url or not key:
             raise RuntimeError("Mistral needs FOUNDRY_ENDPOINT + FOUNDRY_KEY (or MISTRAL_ENDPOINT + MISTRAL_KEY) "
-                               "and DEPLOYMENT_MISTRAL_MEDIUM_35 in .env.")
+                               "and DEPLOYMENT_MISTRAL_LARGE_4 in .env.")
+        # Mistral Large 4 rejects temperature 0 (greedy sampling) unless top_p is exactly 1
         return ChatOpenAI(model=model or s.mistral_deployment, base_url=url, api_key=key, temperature=temp,
-                          max_tokens=max_tokens, max_retries=3, use_responses_api=False)
+                          top_p=1, max_tokens=max_tokens, max_retries=3, use_responses_api=False)
     raise ValueError(f"Unknown provider {s.provider!r}; choose from {PROVIDERS}")
 
 

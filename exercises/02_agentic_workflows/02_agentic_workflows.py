@@ -26,6 +26,7 @@
 # | A2 | Generator-critic loop | Deterministic workflow: loop / generator-critic |
 # | A3 | Director + subagents + human-in-the-loop | Subagents (supervisor) + HITL + custom logic |
 # | A4 | Claude Agent SDK harness + skills | Agent harness + skills (code agent) |
+# | A4m | Mistral Vibe harness + skills | The same pattern with Mistral's own harness |
 # | A5 | Router -> {LLM, ReAct, harness} -> human check | Composing harness agents inside a framework |
 #
 # **Model:** wflow_sbm of the upper Moselle to Epinal (HydroMT build from `hydromt/`), forced with E-OBS for
@@ -39,11 +40,17 @@
 
 # %% [markdown]
 # ## Step 0: Setup
-# Pick the LLM provider for the LangGraph architectures: `"anthropic"` (Claude), `"mistral"` (Mistral on Azure
-# Foundry, deployment `DEPLOYMENT_MISTRAL_MEDIUM_35`) or `"azure"` (GPT). Run the same step with two providers
-# and compare them on the scoreboard. The harness (A4) always uses Claude. With `FOUNDRY_ENDPOINT` +
-# `FOUNDRY_KEY` in `.env`, Claude is called through Azure Foundry (deployment `DEPLOYMENT_OPUS_55`). Otherwise
-# `ANTHROPIC_API_KEY` is used, or set `HARNESS_AUTH = "login"` to use your Claude Code login for A4.
+# `PROVIDER` picks the model for the LangGraph architectures (A0-A3, A5, your own graph): `"anthropic"` (Claude),
+# `"mistral"` (Mistral on Azure Foundry, deployment `DEPLOYMENT_MISTRAL_LARGE_4`) or `"azure"` (GPT). Run the same
+# step with two providers and compare them on the scoreboard.
+#
+# The harness architectures do **not** use `PROVIDER`: each vendor's model runs in that vendor's own harness, so
+# A4 is always Claude + Claude Agent SDK and A4m is always Mistral + Mistral Vibe. A5's open-ended step follows
+# `PROVIDER` the same way (Mistral -> Vibe; Claude, or GPT which has no harness here -> Claude Agent SDK).
+#
+# Claude auth: with `FOUNDRY_ENDPOINT` + `FOUNDRY_KEY` in `.env`, Claude is called through Azure Foundry
+# (deployment `DEPLOYMENT_OPUS_55`). Otherwise `ANTHROPIC_API_KEY` is used, or set `HARNESS_AUTH = "login"` to
+# use your Claude Code login for the Claude harness.
 
 # %%
 import os
@@ -53,8 +60,8 @@ from pathlib import Path
 EXERCISE_DIR = Path.cwd() if (Path.cwd() / "hydroagent").exists() else Path.cwd() / "exercises" / "02_agentic_workflows"
 sys.path.insert(0, str(EXERCISE_DIR))
 
-PROVIDER = "anthropic"          # or "mistral", "azure"
-os.environ.setdefault("HARNESS_AUTH", "auto")   # "login" to use the Claude Code login for A4
+PROVIDER = "anthropic"          # LangGraph architectures only: or "mistral", "azure"
+os.environ.setdefault("HARNESS_AUTH", "auto")   # "login" to use the Claude Code login for the Claude harness
 
 from IPython.display import Image, Markdown, display
 
@@ -68,6 +75,8 @@ from hydroagent.runtime import run_interactive
 
 print("env file:", C.load_env())
 print("settings:", C.get_settings(provider=PROVIDER))
+for k in R.INFOS:   # what each architecture will actually run on
+    print(f"  {k:4s} {R.model_label(k, PROVIDER)}")
 
 
 def show(ev):
@@ -305,7 +314,7 @@ print("skills loaded:", r.skills_loaded, "| usage:", r.usage)
 # ![A5 architecture](docs/figures/a5.png)
 #
 # Try a knowledge question, a uniform parameter scenario, and an open-ended code task. Which route does each take?
-# What does each cost?
+# What does each cost? The open-ended route runs `PROVIDER`'s own harness (Mistral -> Vibe, otherwise Claude).
 
 # %%
 QUESTIONS = [   # edit me: each question gets its own session; watch which route the router picks
