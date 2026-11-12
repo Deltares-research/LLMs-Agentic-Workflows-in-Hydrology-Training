@@ -27,14 +27,14 @@ Pick the level that matches your Python experience. All three use the same code 
 | A5 | Composed | Harness agents inside your own framework | router → {plain LLM \| ReAct \| harness} → human check if unsure |
 | custom | Your graph | anything | built on the canvas or in JSON |
 
-**Notes on A3.** It reuses the *architecture* of the Agent4Hydro project's Director (classify → clarify →
-plan → specialists → finalize, with LangGraph `interrupt`). It does not reuse that project's tools.
+**Notes on A3.** It uses the *architecture* of a Director pattern (classify → clarify → plan → specialists → finalize, with LangGraph `interrupt`).
 
 **How agents change the model:**
+
 - **A0–A3 and A5** change the model only through bounded **parameter multipliers**: Wflow TOML `scale` on
-  staticmaps variables, or a multiplied constant `value`.
+staticmaps variables, or a multiplied constant `value`.
 - **A4** may write code that edits `staticmaps.nc` copies in its own workspace. It can also turn a constant into
-  a spatial map.
+a spatial map.
 - The base model is never modified.
 
 ## Setup (once)
@@ -42,45 +42,37 @@ plan → specialists → finalize, with LangGraph `interrupt`). It does not reus
 From the **repo root**:
 
 1. **Install and verify the environment.** Use the `hydrology-env` skill, or run `uv sync` and install Julia +
+
    `Wflow`. Every row of the verify script must be `OK`, including `agents: langgraph + claude-agent-sdk + streamlit`:
-
-   ```bash
-   uv run python .agents/skills/hydrology-env/scripts/verify_env.py
+2. **Add keys to a** `.env` **file.** It can live at the repo root or in any parent folder. Never paste keys into code.
+   ```
+    # Claude via Azure Foundry (used when both FOUNDRY_* are set):
+    FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/anthropic/v1/messages   # or .../anthropic
+    FOUNDRY_KEY=...
+    DEPLOYMENT_OPUS_55=claude-opus-5-5   # Foundry deployment name
+    # or Claude via the Anthropic API directly:
+    ANTHROPIC_API_KEY=...
+    ANTHROPIC_DEPLOYMENT_SONNET55=claude-sonnet-5-5   # model used for Claude
+    # optional, Mistral on the same Foundry resource (provider "mistral", LangGraph architectures only):
+    DEPLOYMENT_MISTRAL_MEDIUM_35=mistral-medium-3-5   # Foundry deployment name
+    # MISTRAL_ENDPOINT=https://<other-resource>.services.ai.azure.com/openai/v1   # only if on another resource
+    # MISTRAL_KEY=...                                                            # key of that resource
+    # optional, for the Azure switch (LangGraph architectures only):
+    AZURE_OPENAI_API_KEY=...
+    AZURE_OPENAI_API_BASE=...          # or AZURE_OPENAI_ENDPOINT
+    AZURE_OPENAI_API_VERSION=...
+    AZURE_OPENAI_DEPLOYMENT_GPT41=...  # or AZURE_OPENAI_DEPLOYMENT_NAME
    ```
 
-2. **Add keys to a `.env` file.** It can live at the repo root or in any parent folder. Never paste keys into code.
-
-   ```
-   # Claude via Azure Foundry (used when both FOUNDRY_* are set):
-   FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/anthropic/v1/messages   # or .../anthropic
-   FOUNDRY_KEY=...
-   DEPLOYMENT_OPUS_55=claude-opus-5-5   # Foundry deployment name
-   # or Claude via the Anthropic API directly:
-   ANTHROPIC_API_KEY=...
-   ANTHROPIC_DEPLOYMENT_SONNET55=claude-sonnet-5-5   # model used for Claude
-   # optional, Mistral on the same Foundry resource (provider "mistral", LangGraph architectures only):
-   DEPLOYMENT_MISTRAL_MEDIUM_35=mistral-medium-3-5   # Foundry deployment name
-   # MISTRAL_ENDPOINT=https://<other-resource>.services.ai.azure.com/openai/v1   # only if on another resource
-   # MISTRAL_KEY=...                                                            # key of that resource
-   # optional, for the Azure switch (LangGraph architectures only):
-   AZURE_OPENAI_API_KEY=...
-   AZURE_OPENAI_API_BASE=...          # or AZURE_OPENAI_ENDPOINT
-   AZURE_OPENAI_API_VERSION=...
-   AZURE_OPENAI_DEPLOYMENT_GPT41=...  # or AZURE_OPENAI_DEPLOYMENT_NAME
-   ```
-
-   Optional environment variables:
-
-   | Variable | Values | Effect |
-   |---|---|---|
-   | `AGENT_PROVIDER` | `anthropic` \| `mistral` \| `azure` | default provider for the LangGraph architectures |
-   | `HARNESS_AUTH` | `auto` \| `foundry` \| `api_key` \| `login` | `auto` picks Foundry if configured, else the API key, else the Claude Code login on the machine |
-   | `WFLOW_MODE` | `server` \| `subprocess` | `server` (the default) keeps one Julia process alive between runs |
-
+    Optional environment variables:
+    | Variable | Values | Effect |
+    |---|---|---|
+    | `AGENT_PROVIDER` | `anthropic` \| `mistral` \| `azure` | default provider for the LangGraph architectures |
+    | `HARNESS_AUTH` | `auto` \| `foundry` \| `api_key` \| `login` | `auto` picks Foundry if configured, else the API key, else the Claude Code login on the machine |
+    | `WFLOW_MODE` | `server` \| `subprocess` | `server` (the default) keeps one Julia process alive between runs |
 3. **Build the model, run the baseline and create the twin "observations".** This takes about 3 min the first time:
-
    ```bash
-   uv run python exercises/02_agentic_workflows/cli.py prepare
+    uv run python exercises/02_agentic_workflows/cli.py prepare
    ```
 
 The first Wflow run in a session starts Julia, which takes about 1–1.5 min. After that a 2-year run takes about
@@ -139,15 +131,15 @@ $CLI runs                                   # all scenario runs
 Suggested tasks:
 
 - **Add a tool.** Add `seasonal_stats(run_id)` (DJF/MAM/JJA/SON mean flow) to `hydroagent/tools.py` and add it
-  to a tool set. Which architectures use it without further changes?
+to a tool set. Which architectures use it without further changes?
 - **Add a scenario.** Add a type to the A3 allow-list (`SCENARIOS` in `a3_director.py`), for example
-  `land_roughness`.
+`land_roughness`.
 - **Use a deterministic critic.** Replace A2's LLM critic with a rule that uses the KGE components
-  (`critic="rule"` already exists). Is it worse?
+(`critic="rule"` already exists). Is it worse?
 - **Edit the YAML.** Expose `build_model_variant` (it edits the HydroMT build YAML: `ptf_ksatver`, `river_upa`,
-  `rivdph_method`) to an agent, and compare `brakensiek` with `cosby`.
+`rivdph_method`) to an agent, and compare `brakensiek` with `cosby`.
 - **Restrict the harness.** Tighten A4's guard hook in `harness/claude_runner.py`, for example by blocking Bash
-  entirely. What can the agent still do?
+entirely. What can the agent still do?
 
 ## Skills
 
@@ -156,6 +148,7 @@ optional `scripts/`. The agent only sees the *description* until it decides to l
 progressive disclosure.
 
 The harness loads skills from two places:
+
 - `exercises/02_agentic_workflows/skills/`, with `wflow-toml`, `netcdf-analysis` and a `_template`;
 - the repo's `.agents/skills/`, with `hydrology-env`, the environment-setup skill shared by all exercises.
 
@@ -192,17 +185,20 @@ Every run, from any level, is logged to `output/scoreboard.jsonl`. Nothing extra
 | **Quality** | your own 1–5 rating. Only a hydrologist can judge whether the answer is right |
 
 What the time figures leave out:
+
 - Human think-time at HITL prompts.
 - Julia's one-off start-up and compilation (~1 min). It is reported separately, so the first architecture you run is not penalised.
 
 **Cost** is only shown when the model has a price in `pricing.yml`. Claude prices are filled in. Azure prices are left blank, so add your contract prices. The harness also reports the SDK's own cost figure.
 
 **How to rate:**
+
 - Streamlit: the stars under each answer, or edit the table on page **5 · Scoreboard**.
 - Notebook: `scoreboard.rate(entry_id, 1..5)`.
 - CLI: `cli.py rate <entry> <1-5>`.
 
 **How to compare:**
+
 - Streamlit page 5 shows means per architecture, a *quality vs tokens* chart, a time split, and the *token spread*. The token spread tells you how predictable an architecture is.
 - CLI: `cli.py scoreboard -q "<question>" [--runs]`.
 
