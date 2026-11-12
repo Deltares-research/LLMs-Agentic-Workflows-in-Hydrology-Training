@@ -71,9 +71,9 @@ From the **repo root**:
     | `HARNESS_AUTH` | `auto` \| `foundry` \| `api_key` \| `login` | `auto` picks Foundry if configured, else the API key, else the Claude Code login on the machine |
     | `WFLOW_MODE` | `server` \| `subprocess` | `server` (the default) keeps one Julia process alive between runs |
 3. **Build the model, run the baseline and create the twin "observations".** This takes about 3 min the first time:
-   ```bash
-    uv run python exercises/02_agentic_workflows/cli.py prepare
-   ```
+```bash
+uv run python exercises/02_agentic_workflows/cli.py prepare
+```
 
 The first Wflow run in a session starts Julia, which takes about 1–1.5 min. After that a 2-year run takes about
 15 s, because the Julia process is reused.
