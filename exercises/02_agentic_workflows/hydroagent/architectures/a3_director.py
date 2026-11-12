@@ -1,6 +1,6 @@
 """A3 - Director: supervisor + specialist subagents + human-in-the-loop + scenario allow-list.
 
-Pattern adapted from the Agent4Hydro project (Director -> Hydrology / Summarizer specialists), applied to the
+Director pattern (Director -> Hydrology / Summarizer specialists), applied to the
 Moselle Wflow model. Only the *architecture* is reused, not its tools.
 
     classify (LLM) --missing info--> clarify (HUMAN) --> classify

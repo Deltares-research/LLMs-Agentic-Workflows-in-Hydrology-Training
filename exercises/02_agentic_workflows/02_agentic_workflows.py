@@ -209,7 +209,7 @@ print("the truth was:", twin.reveal_truth())   # debrief: equifinality?
 #
 # ![A3 architecture](docs/figures/a3.png)
 #
-# This follows the Director pattern from the Agent4Hydro project:
+# This follows the Director pattern:
 # - an allow-list of scenario types;
 # - clarification questions when inputs are missing;
 # - plan approval before any compute is spent;
