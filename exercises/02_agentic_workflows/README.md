@@ -1,8 +1,7 @@
 # Exercise 2: Agentic architectures for HydroMT / Wflow
 
 Run Wflow simulations of the upper Moselle (to Epinal) through agents of increasing complexity. The aim is to
-learn **when** an architecture is worth its cost, from a single LLM call up to multi-agent graphs and code-writing
-harnesses with skills.
+learn **when** an architecture is worth its level of complexity, autonomy and cost, from a single LLM call up to multi-agent graphs and code-writing harnesses with skills.
 
 > Rule #1: start with a single agent and good tools. Add structure only when you hit a clear limit.
 > (*Agentic Overview*, Google Cloud and LangChain design-pattern guides)
