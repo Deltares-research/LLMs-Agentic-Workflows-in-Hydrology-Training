@@ -10,6 +10,6 @@ python .agents/skills/hydrology-env/scripts/verify_env.py
 
 Stop if the script exits non-zero. Wflow is the Julia package `Wflow` (1.x). Do not `pip install wflow` or `uv add wflow`.
 
-Exercise 2 (MCP analysis) lives in `exercises/02_mcp_rag/`. Clients start `hydro-analysis` from the repo-root `.mcp.json`.
+Exercise 2 (RAG then MCP) lives in `exercises/02_mcp_rag/`. Clients start `hydro-analysis` from the repo-root `.mcp.json`.
 
 Exercise 3 (agentic workflows) has its own agent skills in `exercises/03_agentic_workflows/skills/` (`wflow-toml`, `netcdf-analysis`). The Claude Agent SDK harness copies them into each workspace at runtime. Agent outputs go to `exercises/03_agentic_workflows/output/` (gitignored). Never modify `wflow_moselle_epinal/` from an agent.

@@ -118,9 +118,9 @@ All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.1
 
 After verify is green and `.env` has Azure OpenAI variables, see [exercises/01_information_extraction/](exercises/01_information_extraction/).
 
-## Exercise 2: inspect a Wflow model through MCP
+## Exercise 2: natural language over knowledge and data
 
-Read-only QA of Wflow inputs and outputs (Moselle at Épinal) via an MCP server in your coding agent.
+Ask questions in plain language about **text** (RAG on the Wflow_sbm GMD paper) and **data** (MCP tools on the Moselle / Épinal run).
 See [exercises/02_mcp_rag/](exercises/02_mcp_rag/).
 
 ## Exercise 3: agentic architectures for HydroMT / Wflow

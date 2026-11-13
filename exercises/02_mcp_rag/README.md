@@ -1,12 +1,42 @@
-# Exercise 2: Inspect a Wflow model through MCP
+# Exercise 2: Natural language over knowledge and data
 
-Ask a coding agent questions in plain language about **Wflow inputs and outputs** for the upper Moselle (Épinal). The agent calls tools on a small MCP server; the server does the hydrology computing. You still judge the numbers.
+Two methods for interacting with hydrology material in **natural language**:
 
-The LLM does not run HydroMT or Wflow during this lab. Those steps happen once in `prepare.py`.
+- **Knowledge (text) — RAG:** retrieve from documents, then generate an answer. Here: the Wflow_sbm GMD paper, keyword vs semantic search.
+- **Data (model inputs/outputs) — MCP:** call tools on numbers, maps and time series.
 
-> Always read the tool output yourself: the agent can misread or over-interpret it.
+> Always read retrieved chunks and tool output yourself: LLMs can misread or over-interpret them.
 
-## Setup
+## Part A: RAG tutorial
+
+Index the Wflow_sbm GMD paper, compare keyword vs semantic search, and generate answers.
+
+Notebook: [`RAG_tutorial.ipynb`](RAG_tutorial.ipynb)
+
+### Setup
+
+From the **repo root**:
+
+1. Course environment verify is green (`python .agents/skills/hydrology-env/scripts/verify_env.py`).
+2. Put Foundry settings in the repo-root `.env` (never paste keys into the notebook):
+
+   ```
+   FOUNDRY_ENDPOINT=https://<resource>.services.ai.azure.com/anthropic/v1/messages
+   FOUNDRY_KEY=...
+   DEPLOYMENT_OPUS_55=claude-opus-5-5
+   DEPLOYMENT_MISTRAL_LARGE_4=mistral-large-4
+   DEPLOYMENT_TEXT_EMBEDDINGS_3_LARGE=text-embedding-3-large
+   ```
+
+   Claude can also use `ANTHROPIC_API_KEY` instead of Foundry. Switch `PROVIDER` in the notebook to `"mistral"` if you want Mistral for generation. Embeddings always use the Foundry OpenAI-compatible endpoint.
+
+3. Jupyter: select the project `.venv` kernel. 
+
+## Part B: Inspect a Wflow model through MCP
+
+Ask a coding agent questions in plain language about **Wflow inputs and outputs** for the upper Moselle (Épinal). The agent calls tools on a small MCP server.
+
+### Setup
 
 From the **repo root**:
 
@@ -26,11 +56,11 @@ From the **repo root**:
 
    Twin observations use the same hidden multipliers as Exercise 3 (`ksat_vertical=0.4`, `soil_thickness=1.6`, `ksat_horizontal_ratio=3.0`). They are **not** real gauges. Quality checks on `observed.csv` should look clean; skill scores against the baseline will not be perfect.
 
-## Connect the MCP server in your coding agent
+### Connect the MCP server in your coding agent
 
 Open **this repo as the workspace** (so the relative `exercises/02_mcp_rag/...` path works). Then add a small JSON file — the filename and the top-level key differ per product.
 
-### VS Code Copilot
+#### VS Code Copilot
 
 1. Create `.vscode/mcp.json` at the **repo root** (create the `.vscode` folder if needed). VS Code uses the key `servers`, not `mcpServers`.
 2. Put this in the file:
@@ -50,7 +80,7 @@ Open **this repo as the workspace** (so the relative `exercises/02_mcp_rag/...` 
 3. Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → **MCP: List Servers**. Start `hydro-analysis` if it is stopped.
 4. State should be **Running**. Open the server in that list, or Copilot Chat → tools icon. You should see the six tools below.
 
-### Copilot CLI
+#### Copilot CLI
 
 There is no project `mcp.json` for Copilot CLI. From this repo root, add the server once:
 
@@ -60,7 +90,7 @@ There is no project `mcp.json` for Copilot CLI. From this repo root, add the ser
 
 Then `/mcp list` should show `hydro-analysis`.
 
-### Claude Code
+#### Claude Code
 
 1. Create `.mcp.json` at the **repo root**.
 2. Put this in the file:
@@ -79,7 +109,7 @@ Then `/mcp list` should show `hydro-analysis`.
 3. Start Claude Code from the repo root. Type `/mcp` (or run `claude mcp list`).
 4. `hydro-analysis` should be listed and connected. `/mcp` also lists its tools.
 
-### Cursor
+#### Cursor
 
 1. Create `.cursor/mcp.json` at the **repo root** (create the `.cursor` folder if needed).
 2. Put this in the file:
@@ -103,7 +133,7 @@ Then `/mcp list` should show `hydro-analysis`.
 
 Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip`, `check_discharge`, `plot_staticmaps`, `plot_basin_map`, `skill_scores`, and `plot_hydrograph`. If none appear, reload MCP / the window and confirm `uv` is on PATH.
 
-## Tools
+### Tools
 
 | Tool | What it does |
 |---|---|
@@ -118,7 +148,7 @@ Relative CSV paths resolve under [`data/`](data/). Gauge for sim/obs at Épinal:
 
 The server also exposes two prompt templates: `validate_inputs` and `assess_performance`.
 
-## Prompt examples
+### Prompt examples
 
 Paste these into the agent chat after MCP is connected.
 
@@ -160,7 +190,9 @@ assess performance.
 
 | Path | Role |
 |---|---|
-| [`mcp_server/hydro_server.py`](mcp_server/hydro_server.py) | MCP server (stdio) |
-| [`prepare.py`](prepare.py) | Baseline Wflow run + twin observations |
-| `data/` | `wflow_output_sample.csv`, `observed.csv` (generated, gitignored) |
+| [`RAG_tutorial.ipynb`](RAG_tutorial.ipynb) | Part A: keyword vs semantic RAG |
+| [`data/pdfs/gmd-17-3199-2024.pdf`](data/pdfs/gmd-17-3199-2024.pdf) | Wflow_sbm GMD paper (CC BY 4.0) |
+| [`mcp_server/hydro_server.py`](mcp_server/hydro_server.py) | Part B: MCP server (stdio) |
+| [`prepare.py`](prepare.py) | Part B: baseline Wflow run + twin observations |
+| `data/` | also `wflow_output_sample.csv`, `observed.csv` (generated, gitignored) |
 | `output/` | Hydrograph and map PNGs (gitignored except `.gitkeep`) |
