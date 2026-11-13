@@ -101,7 +101,7 @@ Then `/mcp list` should show `hydro-analysis`.
 
 ### Check the tools
 
-Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip`, `check_discharge`, `check_staticmaps`, `plot_basin_map`, `skill_scores`, and `plot_hydrograph`. If none appear, reload MCP / the window and confirm `uv` is on PATH.
+Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip`, `check_discharge`, `plot_staticmaps`, `plot_basin_map`, `skill_scores`, and `plot_hydrograph`. If none appear, reload MCP / the window and confirm `uv` is on PATH.
 
 ## Tools
 
@@ -109,7 +109,7 @@ Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip
 |---|---|
 | `compare_precip` | ERA5 / CHIRPS / E-OBS basin-mean precipitation (default 1990–2020) |
 | `check_discharge` | Missing days, negatives, flat runs, outliers in a Q series |
-| `check_staticmaps` | No-data inside the basin, land-use/soil shares, 6-panel PNG of `staticmaps.nc` |
+| `plot_staticmaps` | 6-panel PNG of `staticmaps.nc` (elevation, land use, soil, Ksat, LAI) |
 | `plot_basin_map` | Basin, rivers, GRDC gauges and E-OBS cell centres (`output/model_map.png`) |
 | `skill_scores` | NSE, log-NSE, KGE, RMSE, R2, volume error |
 | `plot_hydrograph` | Observed vs simulated Q (linear and log), PNG under `output/` |
@@ -131,7 +131,7 @@ Compare ERA5, CHIRPS and E-OBS precipitation for 1990-2020.
 **Static maps and catchment**
 
 ```
-Check static maps for no-data inside the basin and plot the catchment map.
+Plot the static maps and the catchment map.
 ```
 
 **Discharge QC**
@@ -149,11 +149,11 @@ Compute skill scores of observed.csv / q_obs against wflow_output_sample.csv / r
 **Use the bundled prompts**
 
 ```
-Follow the validate_inputs MCP prompt.
+validate inputs.
 ```
 
 ```
-Follow the assess_performance MCP prompt.
+assess performance.
 ```
 
 ## Files

@@ -1,7 +1,7 @@
 """MCP server (MCPServer, mcp 2.x) for the hydrology data-analysis exercise (stdio).
 
 Tools:
-  input validation: compare_precip, check_discharge, check_staticmaps, plot_basin_map
+  input validation: compare_precip, check_discharge, plot_staticmaps, plot_basin_map
   performance:      skill_scores, plot_hydrograph
 """
 
@@ -90,56 +90,15 @@ def compare_precip(start: str = "1990-01-01", end: str = "2020-12-31") -> dict:
         "monthly_sum_correlation": monthly.corr().round(3).to_dict(),
     }
 
-
 @mcp.tool()
-def check_discharge(csv_path: str, column: str) -> dict:
-    """Basic quality check of a discharge time series (m3/s): missing days,
-    negative values, longest flat run and high outliers (> median + 10*IQR)."""
-    q = _read_series(csv_path, column)
-    full = pd.date_range(q.index.min(), q.index.max(), freq="D")
-    flat = (q.diff() == 0).astype(int)
-    run = flat.groupby((flat == 0).cumsum()).cumsum()
-    iqr = q.quantile(0.75) - q.quantile(0.25)
-    return {
-        "start": str(q.index.min().date()),
-        "end": str(q.index.max().date()),
-        "missing_days": int(len(full) - q.dropna().shape[0]),
-        "negative_values": int((q < 0).sum()),
-        "longest_flat_run_days": int(run.max()),
-        "outliers_above_median_plus_10_iqr": int((q > q.median() + 10 * iqr).sum()),
-        "min": round(float(q.min()), 3),
-        "mean": round(float(q.mean()), 3),
-        "max": round(float(q.max()), 3),
-    }
-
-
-def _category_shares(da: xr.DataArray) -> dict[int, float]:
-    codes, counts = np.unique(da.values[~np.isnan(da.values)], return_counts=True)
-    total = counts.sum()
-    return {int(c): round(float(n / total), 4) for c, n in zip(codes, counts)}
-
-
-@mcp.tool()
-def check_staticmaps() -> dict:
-    """QA of Wflow staticmaps.nc: no-data inside the basin, land-use and soil
-    shares, soil-thickness cap, plus a 6-panel PNG (elevation, land use, soil
-    texture, soil thickness, Ksat vertical, mean LAI)."""
+def plot_staticmaps() -> str:
+    """Save a 6-panel PNG of Wflow staticmaps (elevation, land use, soil
+    texture, soil thickness, Ksat vertical, mean LAI). Returns the path."""
     d = xr.open_dataset(ROOT / "wflow_moselle_epinal" / "staticmaps.nc")
     inside = d["land_elevation"].notnull()
-    n_inside = int(inside.sum())
-    skip = {"river_mask", "outlets", "gauges_grdc"}
-    no_data = {}
-    for k, v in d.data_vars.items():
-        if v.dims != ("latitude", "longitude") or k in skip or k.startswith("river_"):
-            continue
-        n = int((v.isnull() & inside).sum())
-        if n:
-            no_data[k] = n
-
     lu = d["meta_landuse"].where(inside)
     tex = d["meta_soil_texture"].where(inside)
     st = d["soil_thickness"].where(inside)
-
     panels = [
         ("Elevation (m)", d["land_elevation"], "terrain"),
         ("Land use (GlobCover code)", lu, "tab20"),
@@ -155,25 +114,13 @@ def check_staticmaps() -> dict:
         ax.set_title(title)
         ax.set_xlabel("")
         ax.set_ylabel("")
-    fig.suptitle("Static data check: grey = no data (outside basin mask)", fontsize=13)
+    fig.suptitle("Wflow static maps", fontsize=13)
     fig.tight_layout()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = OUT_DIR / "static_data_check.png"
+    out = OUT_DIR / "staticmaps.png"
     fig.savefig(out, dpi=120)
     plt.close(fig)
-
-    return {
-        "n_cells": int(inside.size),
-        "n_inside_basin": n_inside,
-        "basin_fraction": round(float(inside.mean()), 4),
-        "no_data_inside_basin": no_data,
-        "landuse_globcover_share": _category_shares(lu),
-        "soil_texture_usda_share": _category_shares(tex),
-        "soil_thickness_at_max_cap_fraction": round(
-            float((st == st.max()).sum() / n_inside), 4
-        ),
-        "plot": str(out),
-    }
+    return str(out)
 
 
 @mcp.tool()
@@ -208,6 +155,27 @@ def plot_basin_map() -> str:
     plt.close(fig)
     return str(out)
 
+
+@mcp.tool()
+def check_discharge(csv_path: str, column: str) -> dict:
+    """Basic quality check of a discharge time series (m3/s): missing days,
+    negative values, longest flat run and high outliers (> median + 10*IQR)."""
+    q = _read_series(csv_path, column)
+    full = pd.date_range(q.index.min(), q.index.max(), freq="D")
+    flat = (q.diff() == 0).astype(int)
+    run = flat.groupby((flat == 0).cumsum()).cumsum()
+    iqr = q.quantile(0.75) - q.quantile(0.25)
+    return {
+        "start": str(q.index.min().date()),
+        "end": str(q.index.max().date()),
+        "missing_days": int(len(full) - q.dropna().shape[0]),
+        "negative_values": int((q < 0).sum()),
+        "longest_flat_run_days": int(run.max()),
+        "outliers_above_median_plus_10_iqr": int((q > q.median() + 10 * iqr).sum()),
+        "min": round(float(q.min()), 3),
+        "mean": round(float(q.mean()), 3),
+        "max": round(float(q.max()), 3),
+    }
 
 @mcp.tool()
 def skill_scores(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str) -> dict:
@@ -253,10 +221,10 @@ def validate_inputs() -> str:
     """Input-validation workflow: forcing, static maps, and discharge QC."""
     return (
         "Validate the model input data: compare ERA5, CHIRPS and E-OBS precipitation "
-        "with compare_precip, inspect static maps with check_staticmaps (no-data "
-        "inside the basin, land use, soil), optionally plot_basin_map, and check "
-        "the discharge series observed.csv column q_obs with check_discharge. "
-        "Summarise any issue that would make the inputs or observed data unreliable."
+        "with compare_precip, plot static maps with plot_staticmaps, optionally "
+        "plot_basin_map, and check the discharge series observed.csv column q_obs "
+        "with check_discharge. Summarise any issue that would make the inputs or "
+        "observed data unreliable."
     )
 
 
