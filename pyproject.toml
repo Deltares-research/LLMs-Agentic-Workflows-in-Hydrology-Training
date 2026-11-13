@@ -6,4 +6,11 @@ dependencies = [
     "certifi>=2026.10.19",
     "hydromt>=1.4.1",
     "hydromt-wflow>=1.1.0",
+    "matplotlib>=3.11.2",
+    "mcp>=2.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
 ]
