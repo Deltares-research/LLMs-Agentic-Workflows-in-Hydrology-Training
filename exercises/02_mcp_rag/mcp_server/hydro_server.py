@@ -1,13 +1,14 @@
 """MCP server (MCPServer, mcp 2.x) for the hydrology data-analysis exercise (stdio).
 
 Tools:
-  input validation: compare_precip, check_discharge
+  input validation: compare_precip, check_discharge, check_staticmaps, plot_basin_map
   performance:      skill_scores, plot_hydrograph
 """
 
 import os
 from pathlib import Path
 
+import geopandas as gpd
 import matplotlib
 
 matplotlib.use("Agg")
@@ -112,6 +113,102 @@ def check_discharge(csv_path: str, column: str) -> dict:
     }
 
 
+def _category_shares(da: xr.DataArray) -> dict[int, float]:
+    codes, counts = np.unique(da.values[~np.isnan(da.values)], return_counts=True)
+    total = counts.sum()
+    return {int(c): round(float(n / total), 4) for c, n in zip(codes, counts)}
+
+
+@mcp.tool()
+def check_staticmaps() -> dict:
+    """QA of Wflow staticmaps.nc: no-data inside the basin, land-use and soil
+    shares, soil-thickness cap, plus a 6-panel PNG (elevation, land use, soil
+    texture, soil thickness, Ksat vertical, mean LAI)."""
+    d = xr.open_dataset(ROOT / "wflow_moselle_epinal" / "staticmaps.nc")
+    inside = d["land_elevation"].notnull()
+    n_inside = int(inside.sum())
+    skip = {"river_mask", "outlets", "gauges_grdc"}
+    no_data = {}
+    for k, v in d.data_vars.items():
+        if v.dims != ("latitude", "longitude") or k in skip or k.startswith("river_"):
+            continue
+        n = int((v.isnull() & inside).sum())
+        if n:
+            no_data[k] = n
+
+    lu = d["meta_landuse"].where(inside)
+    tex = d["meta_soil_texture"].where(inside)
+    st = d["soil_thickness"].where(inside)
+
+    panels = [
+        ("Elevation (m)", d["land_elevation"], "terrain"),
+        ("Land use (GlobCover code)", lu, "tab20"),
+        ("Soil texture (USDA class)", tex, "tab10"),
+        ("Soil thickness (mm)", st, "viridis"),
+        ("Ksat vertical (mm/day)", d["soil_ksat_vertical"].where(inside), "viridis"),
+        ("Mean LAI (-)", d["vegetation_leaf_area_index"].mean("time").where(inside), "YlGn"),
+    ]
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    for ax, (title, da, cmap) in zip(axes.ravel(), panels):
+        da.plot(ax=ax, cmap=cmap)
+        ax.set_facecolor("#dddddd")
+        ax.set_title(title)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+    fig.suptitle("Static data check: grey = no data (outside basin mask)", fontsize=13)
+    fig.tight_layout()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / "static_data_check.png"
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+
+    return {
+        "n_cells": int(inside.size),
+        "n_inside_basin": n_inside,
+        "basin_fraction": round(float(inside.mean()), 4),
+        "no_data_inside_basin": no_data,
+        "landuse_globcover_share": _category_shares(lu),
+        "soil_texture_usda_share": _category_shares(tex),
+        "soil_thickness_at_max_cap_fraction": round(
+            float((st == st.max()).sum() / n_inside), 4
+        ),
+        "plot": str(out),
+    }
+
+
+@mcp.tool()
+def plot_basin_map() -> str:
+    """Save a PNG of the Moselle-at-Épinal basin, rivers, GRDC gauges and
+    E-OBS grid-cell centres. Returns the path."""
+    geoms = ROOT / "wflow_moselle_epinal" / "staticgeoms"
+    basin = gpd.read_file(geoms / "basins.geojson")
+    rivers = gpd.read_file(geoms / "rivers.geojson")
+    gauges = gpd.read_file(geoms / "gauges_grdc.geojson")
+    eobs = xr.open_dataset(DATA_DIR / "eobs_v31.0e.nc")
+    lon, lat = np.meshgrid(eobs.longitude.values, eobs.latitude.values)
+
+    fig, ax = plt.subplots(figsize=(9, 8))
+    basin.plot(ax=ax, color="#e8f0e8", edgecolor="k")
+    if "strord" in rivers:
+        rivers.plot(ax=ax, column="strord", cmap="Blues", linewidth=rivers["strord"] * 0.4 + 0.3)
+    else:
+        rivers.plot(ax=ax, color="tab:blue", linewidth=0.8)
+    ax.scatter(lon.ravel(), lat.ravel(), s=12, c="tab:red", marker="+", label="E-OBS cell centres (0.1°)")
+    gauges.plot(ax=ax, color="k", marker="^", markersize=50, label="GRDC gauges", zorder=5)
+    ax.set_xlim(*basin.total_bounds[[0, 2]] + np.array([-0.1, 0.1]))
+    ax.set_ylim(*basin.total_bounds[[1, 3]] + np.array([-0.1, 0.1]))
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title("Moselle at Epinal: basin, rivers, gauges, E-OBS grid")
+    ax.legend(loc="lower right")
+    fig.tight_layout()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = OUT_DIR / "model_map.png"
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    return str(out)
+
+
 @mcp.tool()
 def skill_scores(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str) -> dict:
     """NSE, log-NSE, KGE, RMSE, R2 and relative volume error (bias) of simulated
@@ -153,12 +250,13 @@ def plot_hydrograph(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str
 
 @mcp.prompt()
 def validate_inputs() -> str:
-    """Input-validation workflow: forcing products and discharge QC."""
+    """Input-validation workflow: forcing, static maps, and discharge QC."""
     return (
         "Validate the model input data: compare ERA5, CHIRPS and E-OBS precipitation "
-        "with compare_precip, check the discharge series observed.csv column q_obs "
-        "with check_discharge, and summarise any issue that would make the observed "
-        "data unreliable."
+        "with compare_precip, inspect static maps with check_staticmaps (no-data "
+        "inside the basin, land use, soil), optionally plot_basin_map, and check "
+        "the discharge series observed.csv column q_obs with check_discharge. "
+        "Summarise any issue that would make the inputs or observed data unreliable."
     )
 
 

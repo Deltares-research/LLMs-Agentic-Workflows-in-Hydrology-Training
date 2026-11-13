@@ -48,7 +48,7 @@ Open **this repo as the workspace** (so the relative `exercises/02_mcp_rag/...` 
    ```
 
 3. Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) → **MCP: List Servers**. Start `hydro-analysis` if it is stopped.
-4. State should be **Running**. Open the server in that list, or Copilot Chat → tools icon. You should see the four tools below.
+4. State should be **Running**. Open the server in that list, or Copilot Chat → tools icon. You should see the six tools below.
 
 ### Copilot CLI
 
@@ -97,11 +97,11 @@ Then `/mcp list` should show `hydro-analysis`.
    ```
 
 3. Cursor Settings → **MCP**. Enable `hydro-analysis`. Reload the window if it does not appear.
-4. Connected / green, not an error. Expand the server: you should see the four tools below.
+4. Connected / green, not an error. Expand the server: you should see the six tools below.
 
 ### Check the tools
 
-Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip`, `check_discharge`, `skill_scores`, and `plot_hydrograph`. If none appear, reload MCP / the window and confirm `uv` is on PATH.
+Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip`, `check_discharge`, `check_staticmaps`, `plot_basin_map`, `skill_scores`, and `plot_hydrograph`. If none appear, reload MCP / the window and confirm `uv` is on PATH.
 
 ## Tools
 
@@ -109,6 +109,8 @@ Ask the agent: *“List the hydro-analysis MCP tools.”* Expect `compare_precip
 |---|---|
 | `compare_precip` | ERA5 / CHIRPS / E-OBS basin-mean precipitation (default 1990–2020) |
 | `check_discharge` | Missing days, negatives, flat runs, outliers in a Q series |
+| `check_staticmaps` | No-data inside the basin, land-use/soil shares, 6-panel PNG of `staticmaps.nc` |
+| `plot_basin_map` | Basin, rivers, GRDC gauges and E-OBS cell centres (`output/model_map.png`) |
 | `skill_scores` | NSE, log-NSE, KGE, RMSE, R2, volume error |
 | `plot_hydrograph` | Observed vs simulated Q (linear and log), PNG under `output/` |
 
@@ -124,6 +126,12 @@ Paste these into the agent chat after MCP is connected.
 
 ```
 Compare ERA5, CHIRPS and E-OBS precipitation for 1990-2020.
+```
+
+**Static maps and catchment**
+
+```
+Check static maps for no-data inside the basin and plot the catchment map.
 ```
 
 **Discharge QC**
@@ -155,4 +163,4 @@ Follow the assess_performance MCP prompt.
 | [`mcp_server/hydro_server.py`](mcp_server/hydro_server.py) | MCP server (stdio) |
 | [`prepare.py`](prepare.py) | Baseline Wflow run + twin observations |
 | `data/` | `wflow_output_sample.csv`, `observed.csv` (generated, gitignored) |
-| `output/` | Hydrograph PNGs (gitignored except `.gitkeep`) |
+| `output/` | Hydrograph and map PNGs (gitignored except `.gitkeep`) |
