@@ -2,9 +2,16 @@
 
 Training repo for [Hydrology Software Days (Day 3) - LLMs and Agentic Workflows in Hydrology Training](https://softwaredays.deltares.nl/-/hydrology-software-days-day-3-llms-and-agentic-workflows-in-hydrology-training-afternoon-2026).
 
+```bash
+git clone https://github.com/Deltares-research/LLMs-Agentic-Workflows-in-Hydrology-Training.git
+cd LLMs-Agentic-Workflows-in-Hydrology-Training
+```
+
 Python packages live in a project `.venv` managed by uv. Git, uv, and Julia are system tools. Wflow is a **Julia** package (`Wflow.jl` 1.x), not a Python import.
 
 Do not use conda, miniforge, mamba, or pixi.
+
+API keys for Azure OpenAI and Azure AI Foundry are **provided in class**. You can complete install, verify, and the HydroMT / Wflow prepare steps below without a `.env` file.
 
 ## Install
 
@@ -23,7 +30,7 @@ Install and verify the hydrology training environment using the hydrology-env sk
 To check an existing install:
 
 ```
-Verify the hydrology-env skill: Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl, DLLMForge, python-dotenv, and jupyter.
+Verify the hydrology-env skill: Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl, DLLMForge, python-dotenv, jupyter, mcp, pandas, xarray, geopandas, matplotlib, langgraph, claude-agent-sdk, and streamlit.
 ```
 
 The agent should follow the skill and run `python .agents/skills/hydrology-env/scripts/verify_env.py`. If a tool installer changes PATH, open a new terminal and ask it to verify again.
@@ -98,7 +105,16 @@ Need Wflow **1.x** (1.0.4 or newer), not 0.8.
 python .agents/skills/hydrology-env/scripts/verify_env.py
 ```
 
-All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.13.6), Julia, Python 3.13.18+, certifi (>= 2026.10.19), hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), DLLMForge / python-dotenv / jupyter, and Wflow.jl 1.x.
+All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.13.6), Julia, Python 3.13.18+, certifi (>= 2026.10.19), hydromt, hydromt_wflow plugins (`wflow_sbm`, `wflow_sediment`), DLLMForge / python-dotenv / jupyter, Exercise 2 packages (`mcp`, `pandas`, `xarray`, `geopandas`, `matplotlib`), Exercise 3 packages (`langgraph`, `claude-agent-sdk`, `streamlit`), and Wflow.jl 1.x.
+
+#### 5. Build the Moselle Wflow model (once)
+
+The clipped HydroMT data is in `hydromt_data/`. The generated model `wflow_moselle_epinal/` is local (gitignored). This needs no API keys. The first HydroMT build and Julia / Wflow start can take several minutes.
+
+```bash
+uv run python exercises/03_agentic_workflows/cli.py prepare
+uv run python exercises/02_mcp_rag/prepare.py
+```
 
 ## Troubleshooting
 
@@ -116,7 +132,7 @@ All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.1
 
 ## Exercise 1: information extraction
 
-After verify is green and `.env` has Azure OpenAI variables, see [exercises/01_information_extraction/](exercises/01_information_extraction/).
+After verify is green, see [exercises/01_information_extraction/](exercises/01_information_extraction/). Azure OpenAI variables in `.env` are provided in class.
 
 ## Exercise 2: natural language over knowledge and data
 
@@ -134,7 +150,7 @@ This exercise runs Wflow scenarios for the upper Moselle through six agent archi
 - a composed router.
 
 You can also build your own architecture. There are three levels: a Streamlit app, a notebook, and a CLI.
-It needs the Anthropic key (and optionally Azure) in `.env`. See [exercises/03_agentic_workflows/](exercises/03_agentic_workflows/).
+LLM keys in `.env` are provided in class. See [exercises/03_agentic_workflows/](exercises/03_agentic_workflows/).
 
 ## Run a model
 

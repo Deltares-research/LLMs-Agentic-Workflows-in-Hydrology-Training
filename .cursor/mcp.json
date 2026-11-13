@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "hydro-analysis": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "python", "exercises/02_mcp_rag/mcp_server/hydro_server.py"]
-    }
-  }
-}

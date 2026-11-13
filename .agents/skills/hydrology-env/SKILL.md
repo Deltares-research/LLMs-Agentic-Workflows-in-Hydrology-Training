@@ -1,6 +1,6 @@
 ---
 name: hydrology-env
-description: Installs and verifies the hydrology training stack (Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl, DLLMForge, python-dotenv, jupyter, mcp, pandas, xarray, geopandas, matplotlib). Use when setting up the course environment, installing hydromt or wflow, creating the project venv, or checking package versions.
+description: Installs and verifies the hydrology training stack (Git, uv >= 0.13.6, Julia, Python 3.13.18, hydromt, hydromt_wflow, Wflow.jl, DLLMForge, python-dotenv, jupyter, mcp, pandas, xarray, geopandas, matplotlib, langgraph, claude-agent-sdk, streamlit). Use when setting up the course environment, installing hydromt or wflow, creating the project venv, or checking package versions.
 ---
 
 # Hydrology training environment

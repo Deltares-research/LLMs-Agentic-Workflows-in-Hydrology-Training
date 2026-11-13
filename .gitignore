@@ -239,5 +239,11 @@ exercises/03_agentic_workflows/output/*
 # GDAL sidecar files written when HydroMT reads rasters
 hydromt_data/*.aux.xml
 
+# Local IDE / MCP client configs (participants create these; see exercises/02_mcp_rag/README.md)
 .cursor/
 .claude/
+.mcp.json
+.vscode/mcp.json
+
+# Instructor scratch notes (HydroMT/Wflow prepare is documented in the README)
+cmd_example.txt
