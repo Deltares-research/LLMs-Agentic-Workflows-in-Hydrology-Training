@@ -238,3 +238,6 @@ exercises/03_agentic_workflows/output/*
 
 # GDAL sidecar files written when HydroMT reads rasters
 hydromt_data/*.aux.xml
+
+.cursor/
+.claude/
