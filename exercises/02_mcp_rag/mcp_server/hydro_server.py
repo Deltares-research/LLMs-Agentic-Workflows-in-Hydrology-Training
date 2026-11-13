@@ -1,8 +1,8 @@
-"""Small MCP server (MCPServer, mcp 2.x) for the hydrology data-analysis exercise (stdio).
+"""MCP server (MCPServer, mcp 2.x) for the hydrology data-analysis exercise (stdio).
 
-Maps to hydro_data_analysis_example.pptx:
-  Step 1 (input validation): compare_precip, check_discharge
-  Step 5 (performance):      skill_scores, plot_hydrograph, water_balance
+Tools:
+  input validation: compare_precip, check_discharge
+  performance:      skill_scores, plot_hydrograph
 """
 
 import os
@@ -17,10 +17,12 @@ import pandas as pd
 import xarray as xr
 from mcp.server.mcpserver import MCPServer
 
-ROOT = Path(__file__).resolve().parents[1]
+EXERCISE_ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = Path(os.environ.get("HYDRO_DATA_DIR", ROOT / "hydromt_data"))
-EXERCISE_DIR = ROOT / "exercise" / "data"
-OUT_DIR = Path(os.environ.get("HYDRO_OUT_DIR", ROOT / "exercise" / "output"))
+EXERCISE_DIR = EXERCISE_ROOT / "data"
+OUT_DIR = Path(os.environ.get("HYDRO_OUT_DIR", EXERCISE_ROOT / "output"))
+DEFAULT_GAUGE = "9116044"  # Moselle at Epinal (outlet)
 
 PRECIP_SOURCES = {
     "era5": ("era5/precip.nc", "precip"),
@@ -68,9 +70,9 @@ def _aligned(obs: pd.Series, sim: pd.Series) -> tuple[np.ndarray, np.ndarray, pd
 
 @mcp.tool()
 def compare_precip(start: str = "1990-01-01", end: str = "2020-12-31") -> dict:
-    """Step 1: compare spatially averaged daily precipitation (mm/day) of ERA5,
-    CHIRPS and E-OBS over a period. Returns annual mean totals, daily max and
-    the correlation of monthly sums between sources."""
+    """Compare spatially averaged daily precipitation (mm/day) of ERA5, CHIRPS and
+    E-OBS over a period. Returns annual mean totals, daily max and the correlation
+    of monthly sums between sources."""
     series = {}
     for name, (rel, var) in PRECIP_SOURCES.items():
         da = xr.open_dataset(DATA_DIR / rel)[var].sel(time=slice(start, end))
@@ -90,8 +92,8 @@ def compare_precip(start: str = "1990-01-01", end: str = "2020-12-31") -> dict:
 
 @mcp.tool()
 def check_discharge(csv_path: str, column: str) -> dict:
-    """Step 1: basic quality check of a discharge time series (m3/s): missing
-    days, negative values, longest flat run and high outliers (> median + 10*IQR)."""
+    """Basic quality check of a discharge time series (m3/s): missing days,
+    negative values, longest flat run and high outliers (> median + 10*IQR)."""
     q = _read_series(csv_path, column)
     full = pd.date_range(q.index.min(), q.index.max(), freq="D")
     flat = (q.diff() == 0).astype(int)
@@ -112,8 +114,8 @@ def check_discharge(csv_path: str, column: str) -> dict:
 
 @mcp.tool()
 def skill_scores(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str) -> dict:
-    """Step 5: NSE, log-NSE, KGE, RMSE, R2 and relative volume error (bias) of
-    simulated vs observed discharge over their overlapping period."""
+    """NSE, log-NSE, KGE, RMSE, R2 and relative volume error (bias) of simulated
+    vs observed discharge over their overlapping period."""
     obs, sim, idx = _aligned(_read_series(obs_csv, obs_column), _read_series(sim_csv, sim_column))
     eps = 0.01 * obs.mean()
     return {
@@ -130,8 +132,8 @@ def skill_scores(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str) -
 
 @mcp.tool()
 def plot_hydrograph(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str) -> str:
-    """Step 5: save a PNG of observed vs simulated discharge (linear and log axes)
-    and return its path."""
+    """Save a PNG of observed vs simulated discharge (linear and log axes) and
+    return its path."""
     obs, sim = _read_series(obs_csv, obs_column), _read_series(sim_csv, sim_column)
     fig, axes = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
     for ax, log in zip(axes, (False, True)):
@@ -149,43 +151,25 @@ def plot_hydrograph(obs_csv: str, obs_column: str, sim_csv: str, sim_column: str
     return str(out)
 
 
-@mcp.tool()
-def water_balance(sim_csv: str, q_column: str, precip_column: str, area_km2: float) -> dict:
-    """Step 5: long-term water balance for a gauge. Converts discharge to mm over
-    the upstream area and reports P, Q, runoff coefficient and the remainder
-    P - Q (= ET + change in storage)."""
-    q = _read_series(sim_csv, q_column)
-    p = _read_series(sim_csv, precip_column)
-    both = pd.concat([q.rename("q"), p.rename("p")], axis=1).dropna()
-    n_years = len(both) / 365.25
-    q_mm = both["q"].sum() * 86400 / (area_km2 * 1e6) * 1000 / n_years
-    p_mm = both["p"].sum() / n_years
-    return {
-        "years": round(n_years, 2),
-        "precip_mm_per_year": round(float(p_mm), 1),
-        "discharge_mm_per_year": round(float(q_mm), 1),
-        "runoff_coefficient": round(float(q_mm / p_mm), 3),
-        "P_minus_Q_mm_per_year": round(float(p_mm - q_mm), 1),
-    }
-
-
 @mcp.prompt()
 def validate_inputs() -> str:
-    """Step 1 workflow from the deck."""
+    """Input-validation workflow: forcing products and discharge QC."""
     return (
         "Validate the model input data: compare ERA5, CHIRPS and E-OBS precipitation "
-        "with compare_precip, check the discharge series with check_discharge, and "
-        "summarise any issue that would make the observed data unreliable."
+        "with compare_precip, check the discharge series observed.csv column q_obs "
+        "with check_discharge, and summarise any issue that would make the observed "
+        "data unreliable."
     )
 
 
 @mcp.prompt()
 def assess_performance() -> str:
-    """Step 5 workflow from the deck."""
+    """Performance workflow: skill scores and hydrograph at Epinal."""
     return (
-        "Assess model performance: compute skill_scores, plot the hydrograph, and "
-        "check the water_balance. Combine several indicators and state which flow "
-        "regime (peaks, low flows, volume) the model reproduces best."
+        "Assess model performance at Epinal (gauge 9116044): compute skill_scores of "
+        "observed.csv / q_obs against wflow_output_sample.csv / river_q_9116044, and "
+        "plot the hydrograph. Combine several indicators and state which flow regime "
+        "(peaks, low flows, volume) the model reproduces best."
     )
 
 

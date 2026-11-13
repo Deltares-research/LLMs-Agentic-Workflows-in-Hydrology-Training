@@ -14,7 +14,7 @@
 # ---
 
 # %% [markdown]
-# # Exercise 2: Agentic architectures for HydroMT / Wflow
+# # Exercise 3: Agentic architectures for HydroMT / Wflow
 #
 # You will run the same kind of hydrological question through agents of increasing complexity. For each one,
 # ask: *what did the extra structure buy me, and what did it cost?*
@@ -57,7 +57,7 @@ import os
 import sys
 from pathlib import Path
 
-EXERCISE_DIR = Path.cwd() if (Path.cwd() / "hydroagent").exists() else Path.cwd() / "exercises" / "02_agentic_workflows"
+EXERCISE_DIR = Path.cwd() if (Path.cwd() / "hydroagent").exists() else Path.cwd() / "exercises" / "03_agentic_workflows"
 sys.path.insert(0, str(EXERCISE_DIR))
 
 PROVIDER = "anthropic"          # LangGraph architectures only: or "mistral", "azure"

@@ -2469,6 +2469,7 @@ dependencies = [
     { name = "certifi" },
     { name = "claude-agent-sdk" },
     { name = "dllmforge", extra = ["api", "docling"] },
+    { name = "geopandas" },
     { name = "hydromt" },
     { name = "hydromt-wflow" },
     { name = "ipykernel" },
@@ -2480,12 +2481,15 @@ dependencies = [
     { name = "langgraph" },
     { name = "matplotlib" },
     { name = "mcp" },
+    { name = "numpy" },
+    { name = "pandas" },
     { name = "pytest" },
     { name = "python-dotenv" },
     { name = "streamlit" },
     { name = "streamlit-flow-component" },
     { name = "tomlkit" },
     { name = "typer" },
+    { name = "xarray" },
 ]
 
 [package.metadata]
@@ -2493,6 +2497,7 @@ requires-dist = [
     { name = "certifi", specifier = ">=2026.10.19" },
     { name = "claude-agent-sdk", specifier = ">=0.2.179" },
     { name = "dllmforge", extras = ["api", "docling"], git = "https://github.com/Deltares-research/DLLMForge.git?rev=c2b58f44f55621163add7756de5530b1b2f3acfe" },
+    { name = "geopandas", specifier = ">=1.0" },
     { name = "hydromt", specifier = ">=1.4.1" },
     { name = "hydromt-wflow", specifier = ">=1.1.0" },
     { name = "ipykernel", specifier = ">=7.4.0" },
@@ -2504,12 +2509,15 @@ requires-dist = [
     { name = "langgraph", specifier = ">=1.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "mcp", specifier = ">=2.3.0" },
+    { name = "numpy", specifier = ">=2.0" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "streamlit", specifier = ">=1.67.0" },
     { name = "streamlit-flow-component", specifier = ">=1.6.1" },
     { name = "tomlkit", specifier = ">=0.15.2" },
     { name = "typer", specifier = ">=0.27.3" },
+    { name = "xarray", specifier = ">=2025.1.0" },
 ]
 
 [[package]]

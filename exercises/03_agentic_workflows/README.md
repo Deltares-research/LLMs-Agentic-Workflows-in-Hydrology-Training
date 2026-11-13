@@ -1,4 +1,4 @@
-# Exercise 2: Agentic architectures for HydroMT / Wflow
+# Exercise 3: Agentic architectures for HydroMT / Wflow
 
 Run Wflow simulations of the upper Moselle (to Epinal) through agents of increasing complexity. The aim is to
 learn **when** an architecture is worth its level of complexity, autonomy and cost, from a single LLM call up to multi-agent graphs and code-writing harnesses with skills.
@@ -73,7 +73,7 @@ From the **repo root**:
     | `WFLOW_MODE` | `server` \| `subprocess` | `server` (the default) keeps one Julia process alive between runs |
 3. **Build the model, run the baseline and create the twin "observations".** This takes about 3 min the first time:
 ```bash
-uv run python exercises/02_agentic_workflows/cli.py prepare
+uv run python exercises/03_agentic_workflows/cli.py prepare
 ```
 
 The first Wflow run in a session starts Julia, which takes about 1–1.5 min. After that a 2-year run takes about
@@ -82,7 +82,7 @@ The first Wflow run in a session starts Julia, which takes about 1–1.5 min. Af
 ## 🟢 Level 1: Streamlit
 
 ```bash
-uv run streamlit run exercises/02_agentic_workflows/app/streamlit_app.py
+uv run streamlit run exercises/03_agentic_workflows/app/streamlit_app.py
 ```
 
 1. **Architectures.**
@@ -104,10 +104,10 @@ uv run streamlit run exercises/02_agentic_workflows/app/streamlit_app.py
 Run the notebook in **JupyterLab** (opens in your browser), from the repo root:
 
 ```bash
-uv run jupyter lab exercises/02_agentic_workflows/02_agentic_workflows.ipynb
+uv run jupyter lab exercises/03_agentic_workflows/03_agentic_workflows.ipynb
 ```
 
-[`02_agentic_workflows.ipynb`](02_agentic_workflows.ipynb) is paired with `02_agentic_workflows.py` (jupytext).
+[`03_agentic_workflows.ipynb`](03_agentic_workflows.ipynb) is paired with `03_agentic_workflows.py` (jupytext).
 Work through Steps 0–8. Cells marked *edit me* are the knobs. When an agent asks you something (A3, A5, a
 human node in your own graph), answer with the buttons that appear in the cell.
 
@@ -117,7 +117,7 @@ widgets fail to load. If that happens, switch to JupyterLab. Do not have the not
 ## 🔴 Level 3: CLI and source
 
 ```bash
-CLI="uv run python exercises/02_agentic_workflows/cli.py"
+CLI="uv run python exercises/03_agentic_workflows/cli.py"
 $CLI list                                    # architectures, parameters, skills
 $CLI check-model -p mistral                  # does a model support tools + structured outputs?
 $CLI run a1 "Compare +20% and -20% soil thickness for low flows" -p anthropic
@@ -125,7 +125,7 @@ $CLI run a2 -o max_iter=3 -o critic='"rule"'  # options are JSON values
 $CLI run a3 "What if snow melts faster?"      # answers questions at the prompt
 $CLI compare a0 a1 a3 "What if soils become 30% less permeable?" --auto-answer "-30,yes"
 $CLI harness "Halve soil_ksat_vertical in sub-catchment 9116039 and compare annual maxima" -s netcdf-analysis
-$CLI templates && $CLI build --graph exercises/02_agentic_workflows/output/graphs/agent_critic.json "..."
+$CLI templates && $CLI build --graph exercises/03_agentic_workflows/output/graphs/agent_critic.json "..."
 $CLI runs                                   # all scenario runs
 ```
 
@@ -150,7 +150,7 @@ progressive disclosure.
 
 The harness loads skills from two places:
 
-- `exercises/02_agentic_workflows/skills/`, with `wflow-toml`, `netcdf-analysis` and a `_template`;
+- `exercises/03_agentic_workflows/skills/`, with `wflow-toml`, `netcdf-analysis` and a `_template`;
 - the repo's `.agents/skills/`, with `hydrology-env`, the environment-setup skill shared by all exercises.
 
 They are copied into each harness workspace: as `.claude/skills/` for A4 (Claude) and as `skills/` for A4m
@@ -235,9 +235,9 @@ Fill in from the scoreboard (page 5, or `cli.py scoreboard`):
 | `hydroagent/scoreboard.py`, `pricing.yml` | Run log with quality ratings; price table for cost estimates |
 | `skills/` | Exercise skills and `_template` |
 | `app/streamlit_app.py` | Level 1 (pages: Architectures, Compare, Build your own, Skills lab, Scoreboard) |
-| `02_agentic_workflows.ipynb` / `.py` | Level 2 |
+| `03_agentic_workflows.ipynb` / `.py` | Level 2 |
 | `cli.py` | Level 3 |
-| `tests/` | Fast tests, no LLM: `uv run pytest exercises/02_agentic_workflows/tests -q` |
+| `tests/` | Fast tests, no LLM: `uv run pytest exercises/03_agentic_workflows/tests -q` |
 | `output/` | Runs, plots, harness workspaces, graphs (gitignored) |
 
 ## Troubleshooting

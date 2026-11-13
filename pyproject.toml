@@ -6,6 +6,7 @@ dependencies = [
     "certifi>=2026.10.19",
     "claude-agent-sdk>=0.2.179",
     "dllmforge[api,docling]",
+    "geopandas>=1.0",
     "hydromt>=1.4.1",
     "hydromt-wflow>=1.1.0",
     "ipykernel>=7.4.0",
@@ -17,12 +18,15 @@ dependencies = [
     "langgraph>=1.0",
     "matplotlib>=3.11.2",
     "mcp>=2.3.0",
+    "numpy>=2.0",
+    "pandas>=2.2",
     "pytest>=9.2.0",
     "python-dotenv>=1.2.4",
     "streamlit>=1.67.0",
     "streamlit-flow-component>=1.6.1",
     "tomlkit>=0.15.2",
     "typer>=0.27.3",
+    "xarray>=2025.1.0",
 ]
 
 [tool.uv.sources]

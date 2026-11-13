@@ -118,7 +118,12 @@ All rows must be `OK` before course exercises. The script checks Git, uv (>= 0.1
 
 After verify is green and `.env` has Azure OpenAI variables, see [exercises/01_information_extraction/](exercises/01_information_extraction/).
 
-## Exercise 2: agentic architectures for HydroMT / Wflow
+## Exercise 2: inspect a Wflow model through MCP
+
+Read-only QA of Wflow inputs and outputs (Moselle at Épinal) via an MCP server in your coding agent.
+See [exercises/02_mcp_rag/](exercises/02_mcp_rag/).
+
+## Exercise 3: agentic architectures for HydroMT / Wflow
 
 This exercise runs Wflow scenarios for the upper Moselle through six agent architectures:
 - a plain LLM call;
@@ -129,7 +134,7 @@ This exercise runs Wflow scenarios for the upper Moselle through six agent archi
 - a composed router.
 
 You can also build your own architecture. There are three levels: a Streamlit app, a notebook, and a CLI.
-It needs the Anthropic key (and optionally Azure) in `.env`. See [exercises/02_agentic_workflows/](exercises/02_agentic_workflows/).
+It needs the Anthropic key (and optionally Azure) in `.env`. See [exercises/03_agentic_workflows/](exercises/03_agentic_workflows/).
 
 ## Run a model
 

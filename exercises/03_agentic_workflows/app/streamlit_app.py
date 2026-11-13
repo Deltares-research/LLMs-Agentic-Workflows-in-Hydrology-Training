@@ -1,7 +1,7 @@
-"""Exercise 2 - Agentic architectures for HydroMT/Wflow (Streamlit level).
+"""Exercise 3 - Agentic architectures for HydroMT/Wflow (Streamlit level).
 
 Run from the repo root:
-    uv run streamlit run exercises/02_agentic_workflows/app/streamlit_app.py
+    uv run streamlit run exercises/03_agentic_workflows/app/streamlit_app.py
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from hydroagent.builder.templates import TEMPLATES  # noqa: E402
 from hydroagent.harness.claude_runner import available_skills, run_harness  # noqa: E402
 from hydroagent.tracing import Event, Recorder  # noqa: E402
 
-st.set_page_config(page_title="Agentic hydrology - Exercise 2", layout="wide")
+st.set_page_config(page_title="Agentic hydrology - Exercise 3", layout="wide")
 C.load_env()
 
 KIND_COLOUR = {"code": "#f5f5f5", "llm": "#dae8fc", "agent": "#d5e8d4", "human": "#ffe6cc", "harness": "#d0cee2",

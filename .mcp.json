@@ -2,7 +2,7 @@
   "mcpServers": {
     "hydro-analysis": {
       "command": "uv",
-      "args": ["run", "python", "-m", "mcp_server.hydro_server"]
+      "args": ["run", "python", "exercises/02_mcp_rag/mcp_server/hydro_server.py"]
     }
   }
 }

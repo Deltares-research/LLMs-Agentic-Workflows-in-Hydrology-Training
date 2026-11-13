@@ -4,7 +4,7 @@ What the harness gives you "for free" (drawio section B): the agent loop, file s
 skills (SKILL.md, progressive disclosure), subagents, context management, permission hooks.
 What we add:
 * a per-task workspace (``output/harness/<id>/``) used as the agent's cwd;
-* skills copied into ``<workspace>/.claude/skills/`` (from ``exercises/02_agentic_workflows/skills``
+* skills copied into ``<workspace>/.claude/skills/`` (from ``exercises/03_agentic_workflows/skills``
   and the repo's ``.agents/skills``);
 * in-process MCP tools to run Wflow scenarios on the warm Julia server;
 * a PreToolUse hook that blocks writes outside the workspace and destructive shell commands.

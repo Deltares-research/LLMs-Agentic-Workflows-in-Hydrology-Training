@@ -115,8 +115,25 @@ def check_ie_packages() -> tuple[bool, str]:
     return True, f"dllmforge {version}, docling, dotenv, ipykernel, jupyter"
 
 
+def check_mcp_packages() -> tuple[bool, str]:
+    """Exercise 2: MCP server plus the analysis stack (pandas, xarray, geopandas, matplotlib)."""
+    code = (
+        "import importlib.metadata as m; "
+        "import mcp, pandas, xarray, geopandas, matplotlib; "
+        "print(m.version('mcp'), m.version('pandas'), m.version('xarray'), "
+        "m.version('geopandas'), m.version('matplotlib'))"
+    )
+    proc = run(["uv", "run", "python", "-c", code])
+    text = combined(proc)
+    if proc.returncode != 0:
+        return False, text or "failed to import mcp / pandas / xarray / geopandas / matplotlib (run uv sync)"
+    parts = proc.stdout.strip().split()
+    mcp_v, pd_v, xr_v, gpd_v, mpl_v = (parts + ["?"] * 5)[:5]
+    return True, f"mcp {mcp_v}, pandas {pd_v}, xarray {xr_v}, geopandas {gpd_v}, matplotlib {mpl_v}"
+
+
 def check_agent_packages() -> tuple[bool, str]:
-    """Exercise 2: LangGraph, LangChain providers, Claude Agent SDK (bundles the Claude Code CLI), Streamlit."""
+    """Exercise 3: LangGraph, LangChain providers, Claude Agent SDK (bundles the Claude Code CLI), Streamlit."""
     code = (
         "import importlib.metadata as m, pathlib, claude_agent_sdk as c; "
         "import langgraph, langchain_anthropic, langchain_openai, streamlit, streamlit_flow, tomlkit, typer; "
@@ -211,6 +228,7 @@ def main() -> int:
         ("Python 3.13.18+ (uv run)", check_project_python),
         ("certifi + hydromt + hydromt_wflow", check_python_packages),
         ("dllmforge + dotenv + jupyter", check_ie_packages),
+        ("mcp + pandas + xarray + geopandas + matplotlib", check_mcp_packages),
         ("agents: langgraph + claude-agent-sdk + streamlit", check_agent_packages),
         ("hydromt wflow plugins", check_plugins),
         ("Wflow.jl 1.x", check_wflow_jl),

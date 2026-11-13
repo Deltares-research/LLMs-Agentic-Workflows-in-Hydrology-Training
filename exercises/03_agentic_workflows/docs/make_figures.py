@@ -1,6 +1,6 @@
 """Draw one diagram per agent architecture (A0-A5) for the notebook and README.
 
-    uv run python exercises/02_agentic_workflows/docs/make_figures.py
+    uv run python exercises/03_agentic_workflows/docs/make_figures.py
 
 Writes docs/figures/a0.png ... a5.png. Colours follow the builder legend (hydroagent/builder/nodes.py):
 grey = deterministic code, blue = plain LLM call, green = agent, purple = Claude harness, orange = human,

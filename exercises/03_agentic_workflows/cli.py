@@ -1,13 +1,13 @@
-"""Exercise 2 CLI: run, compare and build agentic architectures for HydroMT/Wflow.
+"""Exercise 3 CLI: run, compare and build agentic architectures for HydroMT/Wflow.
 
 Run from the repo root, e.g.:
-    uv run python exercises/02_agentic_workflows/cli.py prepare
-    uv run python exercises/02_agentic_workflows/cli.py list
-    uv run python exercises/02_agentic_workflows/cli.py run a1 "What if soils were 30% less permeable?"
-    uv run python exercises/02_agentic_workflows/cli.py run a2 "Calibrate ..." -o max_iter=3 -o critic=rule
-    uv run python exercises/02_agentic_workflows/cli.py compare a0 a1 a3 "What if ..."
-    uv run python exercises/02_agentic_workflows/cli.py build --graph my_graph.json "question"
-    uv run python exercises/02_agentic_workflows/cli.py harness "Halve ksat in sub-catchment 9116039 ..."
+    uv run python exercises/03_agentic_workflows/cli.py prepare
+    uv run python exercises/03_agentic_workflows/cli.py list
+    uv run python exercises/03_agentic_workflows/cli.py run a1 "What if soils were 30% less permeable?"
+    uv run python exercises/03_agentic_workflows/cli.py run a2 "Calibrate ..." -o max_iter=3 -o critic=rule
+    uv run python exercises/03_agentic_workflows/cli.py compare a0 a1 a3 "What if ..."
+    uv run python exercises/03_agentic_workflows/cli.py build --graph my_graph.json "question"
+    uv run python exercises/03_agentic_workflows/cli.py harness "Halve ksat in sub-catchment 9116039 ..."
 """
 
 from __future__ import annotations

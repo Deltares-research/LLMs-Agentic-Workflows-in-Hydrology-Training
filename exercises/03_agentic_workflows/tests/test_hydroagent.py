@@ -1,4 +1,4 @@
-"""Fast tests (no LLM, no Wflow run). Run: uv run pytest exercises/02_agentic_workflows/tests -q"""
+"""Fast tests (no LLM, no Wflow run). Run: uv run pytest exercises/03_agentic_workflows/tests -q"""
 
 import sys
 from pathlib import Path
