@@ -304,6 +304,9 @@ def run_harness(task: str, *, skills: list[str] | None = None, model: str | None
                 auth: str | None = None, extra_system: str = "") -> HarnessResult:
     """Run the Claude Agent SDK harness on a task (blocking). Works in scripts, Jupyter and Streamlit."""
     rec = recorder or Recorder(on_event)
+    if not C.code_exec_allowed():
+        rec.emit("error", "code execution disabled", C.CODE_EXEC_MSG)
+        return HarnessResult("error", "", "", usage=rec.summary(), error=C.CODE_EXEC_MSG)
     ws = workspace or prepare_workspace(skills)
     rec.emit("info", "harness workspace", str(ws))
     try:

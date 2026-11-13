@@ -53,6 +53,16 @@ SPINUP_END = "2019-03-31"  # metrics ignore the cold-start spin-up period
 
 _ENV_LOADED: Path | None = None
 
+# Code-writing agents (A4, A4m, A5, harness nodes) run LLM-written code with the user's rights. They are off unless
+# HYDROAGENT_ALLOW_CODE_EXEC=1, which the course container sets. Do not set it on a laptop you care about.
+CODE_EXEC_MSG = ("Code-writing agents are disabled on this machine: they run LLM-written code with your rights. "
+                 "Use the course web app, or set HYDROAGENT_ALLOW_CODE_EXEC=1 if you accept the risk.")
+
+
+def code_exec_allowed() -> bool:
+    load_env()
+    return os.getenv("HYDROAGENT_ALLOW_CODE_EXEC", "").strip().lower() in ("1", "true", "yes", "on")
+
 
 def load_env() -> Path | None:
     """Load the course ``.env`` once and return its path (or None)."""

@@ -186,7 +186,7 @@ from hydroagent.architectures import a1_react
 from hydroagent.architectures.common import make_session
 
 MY_PROMPT = a1_react.SYSTEM_PROMPT          # edit me
-MY_TOOLSETS = ("parameters", "simulation", "analysis")   # try removing "analysis"
+MY_TOOLSETS = ("parameters", "simulation", "analysis")   # try removing "analysis" or "simulation"
 
 session = make_session("a1", a1_react.build, provider=PROVIDER, on_event=show,
                        system_prompt=MY_PROMPT, toolsets=MY_TOOLSETS)
@@ -237,6 +237,12 @@ a3_run = run_with_buttons(a3, QUESTION, report)   # a3_run["out"] holds the late
 # ## Step 6: A4, Claude Agent SDK harness + skills (code agent)
 #
 # ![A4 architecture](docs/figures/a4.png)
+#
+# > **Security: run Step 6 in the course web app.** A4, A4m and the skills lab let the LLM write and run its own
+# > code. On your laptop that code would run with your rights (your files, network and keys), so here they run
+# > only in the sandboxed Streamlit app (URL and password given in class). On your machine the cells below stop
+# > with *"Code-writing agents are disabled on this machine"*. Read them to see how the harness is called, then
+# > run the same task on the app's A4 / A4m pages and its skills lab.
 #
 # The harness writes and runs its own Python on `staticmaps.nc` / `output.nc`. It works in a sandboxed
 # workspace and runs Wflow through an MCP tool.
@@ -315,6 +321,9 @@ print("skills loaded:", r.skills_loaded, "| usage:", r.usage)
 #
 # Try a knowledge question, a uniform parameter scenario, and an open-ended code task. Which route does each take?
 # What does each cost? The open-ended route runs `PROVIDER`'s own harness (Mistral -> Vibe, otherwise Claude).
+#
+# On your laptop the open-ended route stops with the "disabled" message (see Step 6); the other routes run
+# locally. Try an open-ended question on the web app's A5 page.
 
 # %%
 QUESTIONS = [   # edit me: each question gets its own session; watch which route the router picks
@@ -336,7 +345,7 @@ for q in QUESTIONS:
 # - `critic` (edges labelled `approved` / `revise`)
 # - `router` (edges labelled with a description of when to take them)
 # - `human`
-# - `claude_harness`
+# - `claude_harness` (web app only: on your laptop it stops with the "disabled" message, see Step 6)
 
 # %%
 from hydroagent.builder.compile import make_custom_session, validate

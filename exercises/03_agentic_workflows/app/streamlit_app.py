@@ -39,6 +39,28 @@ from hydroagent.tracing import Event, Recorder  # noqa: E402
 st.set_page_config(page_title="Agentic hydrology - Exercise 3", layout="wide")
 C.load_env()
 
+
+def _password_gate() -> None:
+    """Shared course password (COURSE_PASSWORD in .env). No password set = no gate (local use)."""
+    import hmac
+    import os
+
+    expected = os.getenv("COURSE_PASSWORD", "")
+    if not expected or st.session_state.get("_authed"):
+        return
+    with st.form("login"):
+        pw = st.text_input("Course password", type="password")
+        ok = st.form_submit_button("Enter")
+    if ok and hmac.compare_digest(pw.encode(), expected.encode()):
+        st.session_state["_authed"] = True
+        st.rerun()
+    if ok:
+        st.error("Wrong password.")
+    st.stop()
+
+
+_password_gate()
+
 KIND_COLOUR = {"code": "#f5f5f5", "llm": "#dae8fc", "agent": "#d5e8d4", "human": "#ffe6cc", "harness": "#d0cee2",
                "io": "#ffffff"}
 NODE_KIND = {"simulate": "code", "plan": "code", "finalize": "code", "blocked": "code", "tools": "code",

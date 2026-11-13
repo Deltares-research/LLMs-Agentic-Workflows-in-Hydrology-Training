@@ -5,6 +5,7 @@ The Claude Agent SDK harness (A4) is Claude-only and does not use this.
 
 from __future__ import annotations
 
+import functools
 import os
 
 from langchain_core.language_models import BaseChatModel
@@ -51,22 +52,41 @@ def get_chat_model(provider: str | None = None, model: str | None = None, temper
         if not url or not key:
             raise RuntimeError("Mistral needs FOUNDRY_ENDPOINT + FOUNDRY_KEY (or MISTRAL_ENDPOINT + MISTRAL_KEY) "
                                "and DEPLOYMENT_MISTRAL_LARGE_4 in .env.")
-        # Mistral Large 4 rejects temperature 0 (greedy sampling) unless top_p is exactly 1
-        return ChatOpenAI(model=model or s.mistral_deployment, base_url=url, api_key=key, temperature=temp,
-                          top_p=1, max_tokens=max_tokens, max_retries=3, use_responses_api=False)
+        # Mistral Large 4 rejects temperature 0 (greedy sampling) unless top_p is exactly 1. It also reasons by
+        # default, and the hidden reasoning tokens count against max_tokens: give it room, or a structured reply
+        # gets cut off (LengthFinishReasonError, or an empty tool call -> None).
+        return _mistral_chat_class()(model=model or s.mistral_deployment, base_url=url, api_key=key,
+                                     temperature=temp, top_p=1, max_tokens=max(max_tokens, 16384), max_retries=3,
+                                     use_responses_api=False)
     raise ValueError(f"Unknown provider {s.provider!r}; choose from {PROVIDERS}")
 
 
-def structured(llm: BaseChatModel, schema):
-    """``llm.with_structured_output(schema)`` that works on current Claude models.
+@functools.cache  # one class, built lazily so importing this module does not import langchain_openai
+def _mistral_chat_class():
+    from langchain_openai import ChatOpenAI
 
+    class MistralFoundryChat(ChatOpenAI):
+        """ChatOpenAI for Mistral on Foundry. Mistral's API rejects the OpenAI ``name`` field on messages (422
+        'extra_forbidden'), which LangChain agents set on their own messages (e.g. ``name="react_agent"``)."""
+
+        def _get_request_payload(self, input_, *, stop=None, **kwargs):
+            payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+            for m in payload.get("messages", []):
+                m.pop("name", None)
+            return payload
+
+    return MistralFoundryChat
+
+
+def structured(llm: BaseChatModel, schema):
+    """``llm.with_structured_output(schema)`` that works on current Claude and Mistral models.
+
+    Both get the API's native structured outputs (``json_schema``: the reply is constrained to the schema).
     LangChain's default for Claude forces a tool call, which Claude Opus 5.5 / Sonnet 5.5 reject (and the call
-    silently yields nothing). Claude gets the API's native structured outputs (``json_schema``) instead.
+    silently yields nothing). Mistral Large 4 sometimes ignores a forced tool call too (the A2 critic got None).
     """
-    if type(llm).__name__ == "ChatAnthropic":
+    if type(llm).__name__ in ("ChatAnthropic", "MistralFoundryChat"):
         return llm.with_structured_output(schema, method="json_schema")
-    if type(llm).__name__ == "ChatOpenAI":  # Mistral via Foundry: tool calling is the portable route
-        return llm.with_structured_output(schema, method="function_calling")
     return llm.with_structured_output(schema)
 
 

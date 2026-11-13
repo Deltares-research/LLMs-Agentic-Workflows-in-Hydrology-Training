@@ -37,6 +37,18 @@ staticmaps variables, or a multiplied constant `value`.
 a spatial map.
 - The base model is never modified.
 
+## Security: code-writing agents run in the course web app only
+
+A4, A4m, A5's open-ended route, `claude_harness` nodes in your own graph, and the skills lab let an LLM write
+and run its own code. On your laptop that code would run with **your** rights: your files, your network, your
+keys. So in this course they run only in the sandboxed Streamlit web app (URL and password given in class). The
+app runs in an isolated container that is deleted after the course.
+
+On your own machine these agents are off. The notebook cells and CLI commands that use them stop with
+*"Code-writing agents are disabled on this machine"*. Everything else (A0–A3, A5's other routes, graphs without
+a harness node) runs locally as usual. Do not switch them on (`HYDROAGENT_ALLOW_CODE_EXEC`) on a machine you
+care about.
+
 ## Setup (once)
 
 From the **repo root**:
@@ -111,6 +123,10 @@ uv run jupyter lab exercises/03_agentic_workflows/03_agentic_workflows.ipynb
 Work through Steps 0–8. Cells marked *edit me* are the knobs. When an agent asks you something (A3, A5, a
 human node in your own graph), answer with the buttons that appear in the cell.
 
+Steps 6 (A4, A4m, skills lab) and 7's open-ended route use code-writing agents. Do those in the course web app
+(see [Security](#security-code-writing-agents-run-in-the-course-web-app-only)); the rest of the notebook runs
+locally.
+
 VS Code's notebook editor also works, but its renderers are less complete: tables can stay empty and some
 widgets fail to load. If that happens, switch to JupyterLab. Do not have the notebook open in both at once.
 
@@ -124,10 +140,13 @@ $CLI run a1 "Compare +20% and -20% soil thickness for low flows" -p anthropic
 $CLI run a2 -o max_iter=3 -o critic='"rule"'  # options are JSON values
 $CLI run a3 "What if snow melts faster?"      # answers questions at the prompt
 $CLI compare a0 a1 a3 "What if soils become 30% less permeable?" --auto-answer "-30,yes"
-$CLI harness "Halve soil_ksat_vertical in sub-catchment 9116039 and compare annual maxima" -s netcdf-analysis
+$CLI harness "Halve soil_ksat_vertical in sub-catchment 9116039 and compare annual maxima" -s netcdf-analysis  # web app only
 $CLI templates && $CLI build --graph exercises/03_agentic_workflows/output/graphs/agent_critic.json "..."
 $CLI runs                                   # all scenario runs
 ```
+
+`harness`, `run a4|a4m|a5` and graphs with a harness node are disabled locally (see
+[Security](#security-code-writing-agents-run-in-the-course-web-app-only)); run those in the course web app.
 
 Suggested tasks:
 
@@ -139,8 +158,9 @@ to a tool set. Which architectures use it without further changes?
 (`critic="rule"` already exists). Is it worse?
 - **Edit the YAML.** Expose `build_model_variant` (it edits the HydroMT build YAML: `ptf_ksatver`, `river_upa`,
 `rivdph_method`) to an agent, and compare `brakensiek` with `cosby`.
-- **Restrict the harness.** Tighten A4's guard hook in `harness/claude_runner.py`, for example by blocking Bash
-entirely. What can the agent still do?
+- **Restrict the harness.** Read A4's guard hook in `harness/claude_runner.py`. How would you block Bash
+entirely? What could the agent still do? Why is a regex denylist not a security boundary (and why does this
+course run the harnesses in a container instead)?
 
 ## Skills
 

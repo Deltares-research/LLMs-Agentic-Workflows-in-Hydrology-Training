@@ -173,3 +173,22 @@ def test_a4m_registered():
 
     assert "a4m" in R.INFOS and R.graph_structure("a4m")[0] == ["__start__", "vibe_harness", "__end__"]
     assert type(R.create_session("a4m")).__name__ == "VibeHarnessSession"
+
+
+def test_mistral_payload_drops_message_names_and_uses_json_schema():
+    """Mistral rejects the OpenAI 'name' field on messages (422), and needs native structured output."""
+    from langchain_core.messages import AIMessage, HumanMessage
+    from pydantic import BaseModel
+
+    from hydroagent.llm import _mistral_chat_class, structured
+
+    llm = _mistral_chat_class()(model="m", base_url="http://localhost/v1", api_key="x", top_p=1)
+    payload = llm._get_request_payload([HumanMessage("hi", name="user1"), AIMessage("ok", name="react_agent"),
+                                        HumanMessage("go")])
+    assert all("name" not in m for m in payload["messages"])
+
+    class S(BaseModel):
+        a: int
+
+    bound = structured(llm, S).first
+    assert bound.kwargs["ls_structured_output_format"]["kwargs"]["method"] == "json_schema"

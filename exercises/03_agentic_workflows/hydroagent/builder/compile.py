@@ -126,7 +126,13 @@ def compile_spec(spec: dict, llm, checkpointer=None, rec=None, **_):
                                  system_prompt=DOMAIN_CONTEXT + "\n\n" + cfg["system_prompt"], name=nid)
 
             def fn(state):
-                res = agent.invoke({"messages": state["messages"]})
+                msgs = list(state["messages"])
+                # After a tool step / plain LLM / another agent the conversation ends on an assistant message.
+                # Mistral rejects that ("Expected last role User or Tool"), so hand the turn back to the user
+                # (only for this call; the shared state is unchanged).
+                if msgs and isinstance(msgs[-1], AIMessage):
+                    msgs.append(HumanMessage("Continue with your step, using the results above."))
+                res = agent.invoke({"messages": msgs})
                 return {"messages": [AIMessage(_last_ai_text(res["messages"]), name=nid)]}
 
         elif t == "plain_llm":

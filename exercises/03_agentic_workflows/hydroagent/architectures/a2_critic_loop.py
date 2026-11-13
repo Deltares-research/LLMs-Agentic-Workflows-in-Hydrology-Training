@@ -39,7 +39,8 @@ class Multiplier(BaseModel):
 class Proposal(BaseModel):
     """Next parameter set to try."""
     reasoning: str = Field(description="1-2 sentences: what you learned from previous tries and why this set")
-    multipliers: list[Multiplier]
+    multipliers: list[Multiplier] = Field(
+        description="ONE parameter set for the next single model run: each parameter at most once")
 
 
 class Verdict(BaseModel):
