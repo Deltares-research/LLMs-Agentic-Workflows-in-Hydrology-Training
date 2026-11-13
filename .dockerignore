@@ -1,0 +1,10 @@
+# Used by exercises/03_agentic_workflows/deploy/Dockerfile (build context = repo root).
+# .env is deliberately NOT ignored: the course container needs the keys.
+.git
+.venv
+.pytest_cache
+**/__pycache__
+**/.ipynb_checkpoints
+exercises/03_agentic_workflows/output
+exercises/01_information_extraction
+cmd_example.txt

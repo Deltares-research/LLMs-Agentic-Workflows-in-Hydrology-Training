@@ -142,7 +142,7 @@ python .agents/skills/hydrology-env/scripts/verify_env.py
 If it fails: read the FAIL row, fix only that component, re-run the script. Do not proceed with course work until exit code 0.
 
 Expected plugins in `uv run hydromt --plugins`: `wflow_sbm`, `wflow_sediment`.
-Expected Python imports via `uv run`: `dllmforge`, `docling`, `dotenv`, `ipykernel`, `jupyter`, plus for Exercise 2 `langgraph`, `langchain_anthropic`, `langchain_openai`, `claude_agent_sdk` (bundles the Claude Code CLI; no Node needed), `streamlit`, `streamlit_flow`.
+Expected Python imports via `uv run`: `dllmforge`, `docling`, `dotenv`, `ipykernel`, `jupyter`, plus for Exercise 3 `langgraph`, `langchain_anthropic`, `langchain_openai`, `claude_agent_sdk` (bundles the Claude Code CLI; no Node needed), `streamlit`, `streamlit_flow`.
 
 ## Version gates
 
@@ -157,7 +157,7 @@ Expected Python imports via `uv run`: `dllmforge`, `docling`, `dotenv`, `ipykern
 | dllmforge | importable (`[api,docling]` extra from git, 0.1.1+) |
 | python-dotenv | importable (`dotenv`) |
 | jupyter / ipykernel | importable |
-| langgraph / claude-agent-sdk / streamlit (Exercise 2) | importable; SDK bundled CLI present |
+| langgraph / claude-agent-sdk / streamlit (Exercise 3) | importable; SDK bundled CLI present |
 
 ## Troubleshooting
 

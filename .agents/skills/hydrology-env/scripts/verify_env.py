@@ -116,7 +116,7 @@ def check_ie_packages() -> tuple[bool, str]:
 
 
 def check_agent_packages() -> tuple[bool, str]:
-    """Exercise 2: LangGraph, LangChain providers, Claude Agent SDK (bundles the Claude Code CLI), Streamlit."""
+    """Exercise 3: LangGraph, LangChain providers, Claude Agent SDK (bundles the Claude Code CLI), Streamlit."""
     code = (
         "import importlib.metadata as m, pathlib, claude_agent_sdk as c; "
         "import langgraph, langchain_anthropic, langchain_openai, streamlit, streamlit_flow, tomlkit, typer; "

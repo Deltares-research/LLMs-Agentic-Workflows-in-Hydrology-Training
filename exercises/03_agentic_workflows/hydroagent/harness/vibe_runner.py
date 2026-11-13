@@ -277,6 +277,9 @@ def run_vibe_harness(task: str, *, skills: list[str] | None = None, model: str |
                      recorder: Recorder | None = None, workspace: Path | None = None) -> HarnessResult:
     """Run the Mistral Vibe harness on a task (blocking). Works in scripts, Jupyter and Streamlit."""
     rec = recorder or Recorder(on_event)
+    if not C.code_exec_allowed():
+        rec.emit("error", "code execution disabled", C.CODE_EXEC_MSG)
+        return HarnessResult("error", "", "", usage=rec.summary(), error=C.CODE_EXEC_MSG)
     s = C.get_settings()
     model = model or s.mistral_deployment
     label = f"mistral:{model}"
